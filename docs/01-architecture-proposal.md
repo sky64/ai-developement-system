@@ -1,264 +1,215 @@
-# Architecture proposal (Phase 1 deliverable) — Cloudroom Multi-Agent Development System
+# Architecture proposal — Cloudroom development workflow
 
-Status: **PROPOSED, awaiting approval.** Supersedes section 3 of `00-audit-and-architecture-proposal.md` after receipt of the implementation brief (2026-10-19). No installation or configuration has been changed.
+Status: **REVISED PROPOSAL; implementation has not started.** Updated 2026-10-19 after independent review. This document replaces the earlier architecture in full. [00](00-audit-and-architecture-proposal.md) is a historical audit; [02](02-compatibility-matrix.md) records current evidence and untested capabilities.
 
-Capability labels used throughout: **Implemented** (exists in this repo now), **Tested** (exercised end to end by me), **Native** (documented vendor feature, not yet tested by me), **Proposed** (to be built), **Unsupported** (verified absent or undocumented).
+The first milestone is one real task through Claude implementation, independent Codex review, CI, owner approval, and merge in one application repository. OpenCode, Hermes, Pi, and decision models remain future options.
 
----
+## 1. Evidence and unresolved prerequisites
 
-## 1. What the audit can and cannot see yet
+Labels: **Observed** = read from the installed CLI or GitHub API; **Documented** = described in the linked vendor documentation; **Proposed** = intended configuration; **Untested** = still needs a behavioral test. CLI help establishes an interface, not successful execution or enforcement.
 
-This session runs in an Anthropic cloud container that holds only this repository. It cannot see your Cloudroom installation, your harness logins, or your ECC state. What is established so far:
+Observed in the project checkout on 2026-10-19:
 
-| Fact | Evidence |
+| Observation | Consequence |
 |---|---|
-| You have a Linux workstation `sky64-omarchy` (Omarchy = Arch Linux) bridged to Claude Code Remote Control | Bridge environment created 2026-10-19 19:54 UTC (Tested) |
-| The Claude iPhone app can start, monitor and converse with Claude Code sessions | This session's origin is `ios` (Tested) |
-| Cloudroom = open-source Rust Core + desktop GUI (macOS; Linux x64 alpha) + invite-only hosted cloud | GitHub repos read directly (Native) |
-| Cloudroom Core runs agents "without approval prompts"; GUI has Mac-access "Ask first"; hosted changelog mentions approvals for agent-initiated turns and a browser-installed mobile app | Core docs (Native); changelog (reported, untested) |
-| ECC is a 311-skill / 71-agent / ~27-hook Claude plugin with partial Codex and OpenCode adapters | ECC repo read directly (Native) |
-| "Ting Cactus" does not resolve to any known model | Web search, two queries, zero matches. See section 8 |
+| Cloudroom CLI reports version 0.43.1; current environment is a Project checkout | This session does not prove a hosted or self-hosted sandbox exists |
+| CLI exposes `--permission-mode`, approval interactions, child-thread options, and stop/queue commands | Test provider × execution mode; do not claim all Cloudroom agents run without prompts |
+| `gh api user` reports `sky64`; PR #1 is authored by `sky64` | Current agent access is not separated from the owner's identity |
+| This repository is private; classic protection API reports unprotected and effective branch rules for `main` are empty | Approval gates are proposed, not already enforced |
+| Application target, GitHub plan, runtime isolation, and mobile behavior are unverified | Resolve these before the first milestone |
 
-**To complete the audit I need the output of the read-only audit kit** (`tools/audit/cloudroom-audit.sh`, Implemented, Tested here) from each machine involved: the Omarchy workstation, any Mac running the Cloudroom app, and any self-hosted Core host. It prints versions, paths, auth *status*, ECC footprint, and credential hygiene, never secret values. Alternatively, resume this session through the Omarchy bridge and I run it myself with your approval.
+The original audit ran in a different environment. Its versions, authentication findings, and platform descriptions must not be treated as the current workstation inventory. The existing audit script is a preliminary inventory only: its CLI output needs review before sharing, and directory counts cannot establish duplicate ECC installations.
 
-Three questions the audit output answers that decide the topology:
+## 2. Minimal architecture and roles
 
-1. Which Cloudroom mode you use today: Local threads in the desktop app, hosted Cloud threads (invite), or a self-hosted Core.
-2. Whether Codex is authenticated as a harness (`codex login status`), separately from ChatGPT web.
-3. Which ECC install route is live (plugin vs manual copy) and whether both coexist.
+Cloudroom manages sessions and execution. GitHub holds code, checks, review evidence, and the merge gate. Shared project instructions describe the workflow. There is no custom approval service.
 
----
-
-## 2. Simplest viable architecture
-
-### 2.1 Design stance
-
-Cloudroom is the execution and session platform. GitHub is the source of truth and the universal approval gate. Each harness keeps its own native guard rails. Claude Code coordinates. **Nothing custom sits in the approval path.** The only things built are files in Git: instructions, policies, templates, a provider registry, and a small set of hooks that already exist in the harnesses' own hook systems.
-
-### 2.2 Topology
-
-```
-                 iPhone
-   ┌──────────────┼──────────────────────────┐
-   │ Claude app   │ GitHub app / mobile web  │ Cloudroom mobile web app (hosted only,
-   │ sessions,    │ PRs, reviews, Actions,   │ Native, untested) or Tailscale → GUI
-   │ prompts      │ Environment approvals    │ dashboard (self-hosted)
-   └──────┬───────┴───────────┬──────────────┴──────────────┬─────────────────┘
-          │                   │                             │
-   Anthropic cloud      GitHub (source of truth)      Cloudroom (execution platform)
-   Claude Code sessions ├─ protected main              ├─ Local threads (Omarchy / Mac)
-   on this repo         ├─ CODEOWNERS = you            ├─ Cloud threads: own sandbox + branch
-                        ├─ required PR review           │   (hosted invite OR self-hosted Core)
-                        ├─ Actions: tests, lint,        └─ harnesses as separate processes:
-                        │   typecheck, AgentShield          Claude Code · Codex · OpenCode
-                        └─ Environments: production         Pi · Hermes (standalone if no adapter)
-                            with required reviewer
-```
-
-### 2.3 Where each principle lands
-
-| Principle | Mechanism | Label |
+| Role | Initial assignment | Responsibility |
 |---|---|---|
-| Model independence | Every harness runs on your own login; shared `AGENTS.md` is harness-neutral; registry records substitutes per role | Proposed |
-| Modularity | One directory per harness under `harness/`; skills as Markdown; providers as registry entries plus one adapter file each | Proposed |
-| GitHub as truth | Branch protection, CODEOWNERS, PR template with decision record link, `docs/decisions/` | Proposed (GitHub Native) |
-| Human oversight | Branch protection + GitHub Environments required reviewers (merge/deploy); Claude native prompts (actions); Hermes native approvals (actions); credential scoping (impossible actions) | Native |
-| Agent specialization | Role matrix in `AGENTS.md`; routing table in `docs/workflows.md`; Claude delegates via Cloudroom child threads or Claude subagents | Proposed |
-| Persistent context | `docs/progress.md`, `docs/decisions/`, `docs/architecture.md` in each project repo; Hermes memory for operational context only | Proposed |
-| Mobile visibility | Claude app, GitHub app, Cloudroom hosted mobile web app (if you have hosted access) | Native, partly Tested |
-| Security | No prod credentials on dev hosts; 1Password `op run` for API keys; agent user without sudo; Tailscale only | Proposed (vendor Native) |
-| Simplicity | Zero new services. Files in Git plus vendor features | — |
+| Lead and implementer | Claude Code in a Cloudroom thread | Intake, implementation, verification, explicit handoff to review |
+| Independent reviewer | Codex in a separate Cloudroom thread/context | Inspect the specified commit, reproduce relevant behavior, report findings |
+| Owner | Human, using a separate GitHub identity from agents | Repository administration, code approval, merge, production access |
+| CI | GitHub Actions | Run the application's existing relevant checks |
 
----
+These are assignments, not permanent model dependencies. Another supported provider can fill a role after its runtime behavior is verified. Harness/model subscription login is separate from GitHub authorization.
 
-## 3. Approval model (replaces the earlier "approval relay" idea)
+Cloudroom delegation uses `room-cli thread spawn` child threads, following the installed CLI help and execution-mode instructions. Do not substitute native harness subagents or launch agent CLIs from scripts inside a Cloudroom thread. First use one implementer and one reviewer; parallel implementation is deferred.
 
-The brief rules out a custom approval API. The approval policy is therefore enforced at four native layers, chosen so that **no agent, and no agent delegating to another agent, can perform an approval-gated action without you**:
+The first milestone needs no always-on operator service, messaging gateway, provider adapter, custom Pi extension, or new hosting purchase.
 
-| Gated action (brief §8) | Enforcement layer | How you approve from iPhone | Label |
-|---|---|---|---|
-| Merge to protected branch | GitHub branch protection: required review from CODEOWNER (you), required status checks, no admin bypass for bots | GitHub app: review → Approve → merge | Native |
-| Production deployment | GitHub Actions deploy job bound to Environment `production` with you as required reviewer; prod credentials exist only as Environment secrets | GitHub app: Deployments → Approve | Native |
-| Destructive DB migration | Migrations run only in the deploy job above; dev DBs are disposable | Same as deployment | Native |
-| Deleting significant files/data | Claude: `PreToolUse` deny rule set + ECC destructive-command hook; Codex: Cloudroom Command Guard + workspace-write sandbox; OpenCode: `permission` config; Pi: extension guard. Git itself makes repo deletions reversible before merge | Claude app prompt (Claude); otherwise blocked and reported in PR | Native + Proposed hooks |
-| Purchasing / raising paid limits | No billing credentials available to agents; registry marks `cost: paid` providers as disabled until approved | N/A: structurally impossible | Proposed |
-| Exposing private info to new providers | Provider disabled in registry until approved; no key in 1Password agent vault | N/A | Proposed |
-| Changing credentials / security policy | 1Password agent vault is read-only; branch protection on this repo's `policy/` via CODEOWNERS | GitHub app review | Native |
-| Granting new permissions | GitHub App / PAT scopes managed by you only | — | Native |
-| Sending external communications | No messaging credentials in agent vaults; Hermes gateway restricted to you as the only allowed chat user | Hermes native approval in chat if enabled | Native |
-| Irreversible / high-impact decisions | Decision record in `docs/decisions/` with status `awaiting-approval`; executed only after you mark it approved in the PR | GitHub app | Proposed |
+## 3. GitHub identities and merge enforcement
 
-Delegation cannot bypass these because the gates are outside every agent: GitHub, GitHub Environments, 1Password scoping, and the OS user. Harness-side hooks are defence in depth and reporting, not the boundary.
+### 3.1 Separate agent authorization
 
-What this model does **not** give you: a single phone prompt for every shell command a Codex, OpenCode or Pi thread runs on a Linux host. Those harnesses run without prompts under Cloudroom. The mitigation is scope: they work on branches, inside disposable workspaces, with no production credentials, and nothing they do lands anywhere without a PR you approve. If after Phase 4 you still want per-command phone approval for those three, the options are Hermes acting as their chat-gated front door, or re-opening the relay idea with your explicit approval.
+Before the pilot, provision a restricted GitHub App installation or dedicated bot account for agent work on the selected repository. Keep the owner's administrative credential outside the agent runtime, including credential helpers, inherited environment, shared home directories, and other available connectors.
 
----
+Agent permissions must be documented and tested: repository content and PR access needed for branch work and review comments; no repository administration, rules management, environment administration, bypass entitlement, production access, or unrelated repository access. Use short-lived credentials where supported. Record identity and permission metadata, never token values.
 
-## 4. Agent roles, routing, and isolation
+A distinct commit author name is insufficient; GitHub evaluates the authenticated actor. Distinct model contexts can share an agent App identity for comments; they do not count as separate human approvals. If implementing CI requires extra workflow-writing permission, the owner bootstraps the reviewed workflow separately instead of granting standing administrative access.
 
-### 4.1 Roles (from the brief, with the mechanism that realises each)
+GitHub [does not allow PR authors to approve their own PRs](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews). PR #1 is therefore a documentation/bootstrap artifact, not proof of a human-review gate. Do not enable an agent bypass to work around that artifact. Demonstrate approval using a new agent-authored pilot PR.
 
-| Role | Agent | Runs where | Mechanism | Fallback if provider is down |
-|---|---|---|---|---|
-| Lead architect, planning, orchestration, complex implementation | Claude Code | Cloudroom thread (Local or Cloud) or Anthropic cloud session | Reads `AGENTS.md` + `CLAUDE.md`; delegates via Cloudroom child threads (`room-cli thread spawn`) or Claude subagents | OpenCode with an Anthropic or other model |
-| Independent review, debugging, tests, alternative implementation | Codex | Cloudroom thread, separate branch | Review checklist skill; posts findings as PR review comments via `gh` | OpenCode with an OpenAI model, or Claude in a fresh context |
-| Flexible development, model experiments | OpenCode | Cloudroom thread (ACP adapter) | `opencode.json` per project; `AGENTS.md` native | Claude or Codex |
-| Persistent assistance, summaries, memory, scheduled maintenance | Hermes | Standalone service on the host (no Cloudroom adapter documented) | Hermes cron + memory; Telegram gateway restricted to you; summarises `docs/progress.md` and PR state | Claude scheduled task (Anthropic cloud) |
-| Lightweight custom agents, extensions | Pi | Cloudroom thread (rpc adapter) or CLI | TypeScript extensions in repo `harness/pi/extensions/` | Claude subagent |
-| Decision support | Jev / future | Registry adapters, disabled until approved | Section 7 | Available LLM agents as independent recommenders |
+### 3.2 Proposed repository rules
 
-### 4.2 Standard workflow (brief §5) as it runs on this stack
+After confirming plan eligibility, the owner configures the target repository:
 
-| Stage | Owner | Concrete action | Bound |
-|---|---|---|---|
-| 1 Intake | Claude | Creates `docs/decisions/NNNN-<feature>.md` from template with requirements, assumptions, acceptance criteria | 1 turn |
-| 2 Planning | Claude (+ Codex or OpenCode for consequential choices) | Plan appended to the decision record; independent analysis requested as a child thread with a fixed prompt | max 2 recommenders |
-| 3 Implementation | Assigned agents | One branch or worktree per task; Cloud threads get their own sandbox and branch natively; Local threads use `git worktree add ../<repo>-<task>` | concurrency ≤ 3 threads per project (policy) |
-| 4 Verification | GitHub Actions + Codex | CI: tests, lint, typecheck, AgentShield; Codex review on PRs labelled `needs-review` | CI timeout per repo |
-| 5 Approval | You | GitHub review / Environment approval per section 3 | — |
-| 6 Integration | You merge; Claude | Squash merge; decision record status → `accepted`; `docs/progress.md` updated | — |
-| 7 Reporting | Claude or Hermes | PR description summary + `docs/progress.md` entry: done, verification, risks, next | — |
+- Require a PR, approval from the owner through CODEOWNERS, and the named CI checks.
+- Cover the whole repository and CODEOWNERS itself; require fresh review after changes.
+- Apply protection to administrators where supported, and give agents no bypass or rule-editing permissions.
+- Disable force pushes and deletion of the protected branch.
+- Select the expected CI App as check source where supported; agents must not satisfy checks by submitting arbitrary statuses.
+- Protect workflow and deployment changes through the same human review.
 
-Loop control: no agent re-invokes another agent on its own output more than twice; retries capped at 2 per task; a thread that exceeds its budget stops and writes a blocker to `docs/progress.md` instead of continuing. Enforced by convention in `AGENTS.md` and by the harness limits that exist (Claude `--max-turns` for scripted runs, `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`, Cloudroom's one-turn-at-a-time queue and 30-minute idle sleep). Cost visibility: Claude `/cost`, Codex and OpenCode session usage output, Cloudroom dashboard; aggregated weekly by Hermes into `docs/progress.md` (Proposed).
+These settings do not reserve the merge button exclusively for the owner after approval; owner-only merging remains the pilot procedure unless separately enforced. The enforced target is that an agent cannot merge **without** owner approval.
 
----
+Private-repository [branch protection requires an eligible paid GitHub plan](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches). Record eligibility and inspect effective rules. If protection is unavailable, stop the enforcement milestone: a voluntary review convention must not be reported as an enforced gate.
 
-## 5. ECC integration plan
+## 4. Production deployment is a separate decision
 
-Decision rule: **one route only.** The audit kit reports which route exists. Then:
+Production deployment is outside the first milestone. Development runtimes and PR CI receive no production credentials. Production database changes, destructive migrations, billing administration, and external messaging are excluded from the pilot.
 
-| Situation found | Action |
+GitHub [Environment required reviewers are public-repository-only on Free, Pro, and Team plans](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments). This repository is private; do not promise Environment approval without verifying the target repository's eligibility.
+
+Choose and document one of these before introducing deployment:
+
+| Option | Required boundary |
 |---|---|
-| Plugin installed and no manual copies | Keep plugin; switch to a minimal/standard hook profile; prune enabled skills |
-| Manual copy (skills/agents/commands under `~/.claude/`) and no plugin | Record inventory, uninstall via `ecc-universal uninstall --dry-run` first, then install plugin minimal |
-| Both | Stop. Report duplicates. Remove the manual copy after you approve (duplicate hooks execute twice) |
-| Nothing | Install plugin minimal profile in Phase 2 |
+| Eligible Environment with required reviewers | Owner reviewer, no agent bypass/admin access, production credentials only behind the gate, explicit approved branch restrictions |
+| Owner performs deployment manually | Production credentials and execution stay in an owner-only environment; no agent-accessible automatic production job |
+| Existing deployment platform's approval feature | Verify plan eligibility, identity separation, credentials, and rejection behavior before use |
 
-Keep (Claude plugin): planning/architecture skills, `tdd-workflow`, `code-review`, debugging/root-cause, `security-review`, documentation, refactoring, verification-before-completion, destructive-command and secrets hooks. Skip: 97 command shims, continuous-learning daemon, commercial hooks, MCP bundle.
+A manual workflow trigger under an agent-accessible identity is not a human approval gate. If preventing self-review would block the sole owner's workflow, define and test the triggering identity before choosing that configuration. Approval evidence must identify the deployed commit. Production access stays unavailable until the selected boundary passes its own test.
 
-Share with Codex and OpenCode through this repo, not through ECC's per-harness installers: `AGENTS.md`, `.agents/skills/` (Markdown subset of the kept skills), `.agents/policies/`. Codex reads `AGENTS.md` natively. OpenCode reads `AGENTS.md` natively; its `ecc-universal` plugin (hooks only) is optional. Claude-specific items stay in `.claude/` and the plugin.
+## 5. Execution boundaries and limits of the controls
 
----
+Threat model: an agent may make a mistake, follow hostile repository content, or ignore its instructions. Tests provide evidence for specific controls; they do not prove that every possible bypass is impossible.
 
-## 6. Repository conventions (brief §9, adapted)
+| Area | Proposed boundary | Limit / required evidence |
+|---|---|---|
+| Files and processes | Prefer a disposable, isolated runtime with only the target repo and required dev data | A branch/worktree separates Git state, not OS access; inspect mounts, user permissions, helpers, sockets, and inherited credentials |
+| Local execution | Explicit permission mode plus verified provider sandbox, where supported | A thread on the daily workstation is not assumed disposable or restricted; use supervised execution until its boundaries are established |
+| Merge | Separate agent identity plus effective GitHub rules | Test rejected direct push and merge without owner review in a disposable test repository/branch with matching rules |
+| Production | No development access to production credentials or endpoints where enforceable | Check all credential sources and network paths; absence from one vault alone is insufficient |
+| Secrets | Provide only task-specific development credentials when needed | Read-only vault access limits mutation, not use of credentials; injected secrets are readable by their receiving process |
+| Providers and network | Use only approved providers; enforce destination restrictions externally if that guarantee is required | A registry flag or missing API key is not an egress control; free/unauthenticated endpoints may exist |
+| Spending | Avoid new paid APIs in the pilot; verify provider-side limits for any existing paid access | No billing login does not prevent usage charges through an existing key; alerts are not hard caps |
+| Hooks and policies | Instructions, deny rules, and scanners help prevent mistakes | They do not replace OS, credential, network, or GitHub boundaries |
 
-```
-<project>/
-├── AGENTS.md            portable: roles, workflow, conventions, approval policy summary (all harnesses)
-├── CLAUDE.md            Claude-only additions; imports AGENTS.md
-├── README.md
+[1Password `op run`](https://developer.1password.com/docs/cli/reference/commands/run/) injects secrets into the launched process environment. If adopted later, use scoped development access and verify plan eligibility and runtime exposure; do not describe it as hiding secrets from agents.
+
+Document each control as observed, tested, proposed, or unavailable. Where enforcement is missing, restrict scope or require supervision and state the residual risk. Do not use the earlier “structurally impossible” or “no agent can bypass” claims.
+
+## 6. Pilot workflow, review trigger, and recovery
+
+### 6.1 One task through merge
+
+| Stage | Action | Evidence |
+|---|---|---|
+| Intake | Owner/lead selects a small real task and records acceptance criteria and bounds in an issue or PR | Task link and agreed scope |
+| Implementation | Claude works in its assigned branch/runtime and runs relevant existing checks | Commit SHA and check results |
+| Review handoff | Lead or owner explicitly starts a Codex Cloudroom child thread with repo, base/head SHAs, acceptance criteria, and review scope | Thread reference and immutable reviewed SHA |
+| Independent review | Codex inspects the diff and relevant behavior in a separate context and reports findings as PR comments or linked review output | Findings, tests, risks, and reviewed SHA |
+| Correction | Implementer fixes findings; changed commits receive another review within the remaining budget | Updated checks and review |
+| Approval | Owner reviews the final commit and CI results under the human identity | GitHub approval |
+| Integration | Owner merges after the gates pass; record outcome in the PR | Merge SHA and brief result |
+
+A `needs-review` label is informational in the pilot; there is no watcher or automatic reviewer trigger. Reviewer results must identify the final commit. If the head changes, earlier findings remain historical and approval must be refreshed as configured. CI success alone does not prove acceptance criteria.
+
+Keep task state in the PR/issue. Reserve ADRs for consequential architecture decisions; avoid a new ADR for every small task. A short `docs/progress.md` may link current work, but must not become a competing task database. Record completion in the PR rather than making an unreviewed post-merge commit.
+
+### 6.2 Bounds and stop procedure
+
+Before a launch, record the provider, runtime, permission mode, supported limits, owner/operator, deadline, and remaining retries in the task record.
+
+| Bound | Initial rule | Enforcement / fallback |
+|---|---|---|
+| Active work | One implementer and one reviewer; no recursive delegation | Lead/operator checks active task threads before launch; policy until runtime support is tested |
+| Corrections | At most two correction/review cycles per task; at most two retries of an operation | Track counts explicitly; exhaustion produces a blocker, not an automatic relaunch |
+| Wall time | Explicit deadline for each active run | Use a verified runtime timeout if available; otherwise an attended operator must stop the run at the deadline |
+| CI | Set finite job `timeout-minutes` appropriate to the application | Test an intentional failure in the pilot |
+| Paid usage | Record available provider limits and remaining allowance | Use provider-enforced caps when available; otherwise supervised use only, with no claim of a hard cost limit |
+
+Instructions and counters are conventions unless an external runtime enforces them. One-turn queues, idle sleep, and weekly usage summaries do not cap active execution or cost. If an unattended run cannot be stopped by a verified external limit, do not run it unattended.
+
+At a deadline, repeated failure, provider outage, or uncertain completion:
+
+1. Operator stops only the task's known Cloudroom thread IDs, including children, using the installed `thread stop` interface. Do not assume stopping a parent stops its children or background processes.
+2. Inspect each task thread's queue and owned background jobs; cancel unintended queued work and stop only processes started for the task. Verify stop completion before launching a replacement.
+3. Record last committed SHA, uncommitted work, completed/uncertain side effects, test results, remaining budget, and blocker in the PR/issue.
+4. Before resuming, inspect repository and PR state and reconcile uncertain operations. Do not blindly repeat pushes, deployments, or external writes.
+5. Resume explicitly within the remaining bounds. If exhausted, return the blocker to the owner with the evidence needed for a new decision.
+
+Stop, queue cancellation, restart, and credential revocation behavior must be exercised on disposable task resources before unattended operation is considered.
+
+## 7. Runtime and mobile verification
+
+Record exact app/CLI and harness versions, execution mode (project checkout, worktree, hosted sandbox, or self-hosted host), permission mode, and whether each test passed. Use the installed commands and current documentation; option presence is not a passing test.
+
+For Claude and Codex separately:
+
+- Run a harmless in-workspace action, a harmless out-of-workspace access probe, and a harmless approval/deny interaction in disposable fixtures. Record what was blocked, prompted, allowed, or unsupported.
+- Verify the intended credential identity without printing tokens. Check the runtime's ability to read an owner-only dummy file and platform credential locations without opening real secrets.
+- Exercise stop, interruption, queue handling, and explicit resume, including a child thread and a task-owned background process.
+- Test phone monitoring, answering a question, and approving/denying an action through the intended UI. Test a GitHub review on the separate-agent pilot PR.
+
+Cloudroom CLI 0.43.1 advertises permission modes and `thread interactions` for approvals, denials, and questions. Provider and hosting support may differ. Do not infer phone behavior or native Claude-app connectivity from those interfaces. The Claude app, Cloudroom mobile web, and GitHub mobile are candidate channels; mark each tested or unavailable for the selected setup.
+
+Failure of mobile action approval limits unattended remote operation; it does not justify silently switching permission modes. No custom relay or Hermes gateway is required to complete the initial development pilot.
+
+## 8. ECC and repository conventions
+
+### 8.1 Preserve existing installs until ownership is known
+
+The audit kit can suggest where to look; it does not prove duplication. Manual skills and a plugin can coexist without invoking the same hook twice.
+
+Before any ECC cleanup, inventory source/version, install manifests, enabled plugin entries, hook registrations, resolved script paths, and relevant file ownership. Identify actual duplicate registrations and preserve unrelated/custom files. Propose exact changes and a backup/rollback method before removal. Do not uninstall based on directory presence or counts, and do not assume an uninstall command exists for the installed route.
+
+For the pilot, keep working configuration. Add only skills needed for the selected task; no blanket reinstall or global migration is required. If importing skills later, preserve license/attribution, pin their source, and test discovery per harness. Reading `AGENTS.md` does not prove full hook or skill portability.
+
+### 8.2 Minimum application layout
+
+```text
+<application>/
+├── AGENTS.md                    shared workflow and conventions
+├── CLAUDE.md                    Claude-specific additions/import, if needed
 ├── docs/
 │   ├── architecture.md
-│   ├── decisions/       ADR + decision-support records (template in this repo)
-│   ├── progress.md      current tasks, blockers, approvals outstanding, next actions
-│   └── workflows.md     routing table and stage checklist
-├── .agents/
-│   ├── skills/          Markdown skills shared across harnesses
-│   └── policies/        approval-policy.yaml, budgets.yaml (human-readable; enforced by GitHub + hooks)
-├── .claude/settings.json     Claude permissions, hooks, plugin enablement (project scope)
-├── .opencode/ or opencode.json
-├── .codex/ (if needed)       Codex project config
+│   └── decisions/               only consequential decisions
 ├── .github/
-│   ├── CODEOWNERS, pull_request_template.md
-│   └── workflows/ci.yml, deploy.yml (Environment: production)
-└── tests/
+│   ├── CODEOWNERS
+│   ├── pull_request_template.md
+│   └── workflows/               application's relevant CI
+└── existing source and tests
 ```
 
-This repository (`ai-developement-system`) holds the templates, the provider registry, the audit kit, and the operations guide. Each application repo gets the structure above via a documented bootstrap checklist (Phase 2).
+Reuse existing repository conventions. This system repository holds the proposal and audit tools; application templates and configuration are future implementation work. Do not create empty policy files, adapter directories, or a parallel task store merely to match a diagram.
 
----
+## 9. Milestones, cost, and acceptance
 
-## 7. Decision-support architecture (interfaces first, no new providers)
-
-**Provider registry** (`registry/providers.yaml`, Proposed; schema in Appendix A) with one entry per agent or model: name, provider, endpoint/runtime, auth method (always a 1Password reference, never a value), capabilities, tool-use, structured output, context limit, cost class, privacy constraints, health check, approved use cases, `enabled: false` by default for anything unverified or paid.
-
-**Decision-support workflow** (`docs/decisions/TEMPLATE-decision-support.md`, Proposed): define decision and criteria → select enabled providers by capability → request independent recommendations with identical prompts and no shared context → capture evidence, assumptions, uncertainty → compare against explicit criteria → list disagreements → recommendation with rationale → status `awaiting-approval` until you approve in the PR. Consensus is recorded as consensus, never as proof.
-
-Initial providers for testing (all already yours): Claude Code, Codex, OpenCode (whatever model you select). Jev: entry present, `enabled: false`, adapter stub only, until you hold a key and approve the cost. Ting Cactus: no entry until identified.
-
----
-
-## 8. Unverified providers
-
-| Name | Verification result | Needed from you |
+| Milestone | Scope | Exit evidence |
 |---|---|---|
-| **JEV** | Identified with high confidence as **Jev by TypeSafe AI**: hosted "System One" typed-decision model, `POST https://api.typesafe.ai/v1/systemone`, bearer `TYPESAFE_API_KEY`, SDKs `typesafe-sdk` (Python) and `@typesafe-ai/sdk` (Node 20+), primitives Choice / Score / Noul, text-only, early access, $0.042 per M input tokens | Confirm; tell me whether you hold a key |
-| **Ting Cactus** | **Not identified.** Two searches returned no model, product or paper by that name. Nearest candidates: Cactus Compute (YC; on-device inference engine and the 26M–121M "Needle" tool-calling model, MIT); unrelated "Cactus" products in real estate and retail; Hugging Face users named Ting | Confirm the exact name, vendor and a URL |
-| Laya AI (from your first message) | Identified (open-source ModernBERT-based decision model). Dropped from scope per the brief unless you say otherwise | — |
+| A. Establish prerequisites | Choose one application; verify plan, separate GitHub identity, runtime boundaries, existing checks, and supported limits | Redacted capability/permission record; owner configures gates |
+| B. Prove one task | Claude implements; Codex independently reviews; CI runs; owner approves and merges | Task, PR, final reviewed SHA, approval, CI and merge evidence |
+| C. Exercise failure/recovery | Reject unauthorized push/merge, fail CI, interrupt a task, simulate provider unavailability, resume safely | Disposable test evidence and documented residual risks |
+| D. Verify mobile operation | Test the chosen phone interfaces with the actual providers/mode | Per-action pass/fail record; no inference from CLI help |
+| Later, individually justified | OpenCode, parallel implementers, Hermes, Pi, decision models, deployment automation | Separate scope, cost, credentials, and acceptance criteria |
 
----
+The first milestone is complete only after B and the relevant safety/recovery tests in C pass. Mobile success in D is required before claiming phone-operated unattended work. Additional harnesses and production deployment are not initial completion criteria.
 
-## 9. Phased plan with complexity, cost and risk
+Documentation changes add no runtime dependency. Execution may consume subscription allowance or paid CI/API usage; private-repository protections may require a plan upgrade. No new spend, hosting, or credential provisioning is assumed to be approved by acceptance of this document. Record actual eligibility and cost before selecting a paid option.
 
-| Phase | Work | Complexity | Incremental cost | Main risk |
-|---|---|---|---|---|
-| **1 Audit** (now) | Audit kit run on your machines; confirm Cloudroom mode, Codex auth, ECC route; this proposal and matrix | Low | None | Audit output incomplete → topology undecided |
-| **2 Core foundation** | `AGENTS.md`, `CLAUDE.md`, templates, policies, registry schema in this repo; ECC single-route cleanup; branch protection + CODEOWNERS + CI skeleton on one target repo; validate Claude and Codex threads in Cloudroom end to end | Medium | None (existing subscriptions) | ECC duplicate removal touches your global `~/.claude`; done only after approval of the inventory |
-| **3 Multi-agent workflow** | OpenCode login and adapter check; delegation via child threads; worktree isolation; Codex review loop on a real PR; merge | Medium | OpenCode model costs only if you choose paid models | Cloudroom adapters are alpha; fallback is running CLIs directly in worktrees |
-| **4 Mobile operations** | Test and document: Claude app prompts (cloud + Remote Control), GitHub app reviews and Environment approvals, Cloudroom hosted mobile web app (if invited) or Tailscale access to the GUI/dashboard, Hermes Telegram summaries; write the guide with Tested/Unsupported labels | Low–Medium | Tailscale free tier; none otherwise | Cloudroom mobile approval claims may not hold; documented as Unsupported if so |
-| **5 Decision engine** | Registry populated, adapter interface, decision template exercised with Claude + Codex + OpenCode on one real decision | Medium | None | Scope creep; kept to files and prompts |
-| **6 Reliability test** | One real feature through all seven stages, with a forced failure (CI red, provider outage) and recovery | Medium | Normal usage | — |
+A negative permission test must use disposable resources with matching rules and an identified agent credential. If an unauthorized write unexpectedly succeeds, contain it, record the failure, and repair the boundary before retrying. A missing boundary is a failed test, not a documentation exception.
 
-Optional, only if you choose always-on cloud execution without a hosted invite: self-hosted Cloudroom Core on an Ubuntu 24.04 VM (about $10–40/month VPS, or $0 on a home machine), Tailscale, 1Password service account (requires Teams or Business). Complexity Medium. Approval required before any spend.
+## 10. Deferred decision support
 
----
+Do not implement a provider registry or adapters for the pilot. Independent Claude/Codex analysis on consequential choices can use the existing review handoff, recording evidence, uncertainty, disagreement, and rationale.
 
-## 10. Definition-of-done mapping
+A later registry could describe approved providers, capabilities, privacy, cost, and discovery. Its settings would govern only clients that use it. It would not itself enforce network access or spending. Keep model capabilities attached to a tested model/runtime version rather than assuming a harness has one fixed context limit.
 
-| Done criterion (brief §13) | Phase | How it will be shown |
-|---|---|---|
-| Claude leads a development task | 2, 6 | Decision record + PR authored from a Cloudroom thread |
-| Codex independently reviews | 2, 6 | Codex review comments on the PR, from its own thread and login |
-| OpenCode executes a separate task | 3 | Second PR from an OpenCode thread |
-| Hermes and Pi have tested roles | 3, 4 | Hermes daily summary into `docs/progress.md`; one Pi extension in use |
-| ECC without conflicts | 2 | Audit kit shows one route; hooks fire once |
-| Portable configurations | 2 | `AGENTS.md` consumed by Claude, Codex, OpenCode |
-| Safe parallel work | 3 | Two threads, two branches, both merged without conflict |
-| iPhone monitoring | 4 | Screenshots/notes per channel in the mobile guide |
-| Remote questions and approvals | 4 | A Claude prompt answered and a PR approved from the phone |
-| No bypass of approvals | 2, 6 | Attempted merge/deploy by an agent is blocked by GitHub; recorded |
-| New model via documented adapter | 5 | Adding a registry entry + adapter stub in one PR |
-| End-to-end demonstration | 6 | Written validation report |
+Jev, “Ting Cactus,” and Laya remain research candidates from the historical brief, with identity/access/pricing/privacy to be verified if selected. No new provider credential, API request, adapter stub, or service is needed now.
 
----
+## 11. Implementation boundary
 
-## Appendix A: provider registry schema (proposed)
+This revision updates proposal documentation and audit inventory labels only. It does not provision agent identities, alter branch rules, install or remove ECC, change runtime permissions, start other agents, merge the PR, or enable deployment.
 
-```yaml
-# registry/providers.yaml
-providers:
-  - id: claude-code
-    name: Claude Code
-    provider: Anthropic
-    kind: coding-agent            # coding-agent | llm | decision-model | tool
-    runtime: cli                  # cli | http | local
-    endpoint: null                # for http providers
-    auth: { method: oauth-subscription, secret_ref: null }   # or op://vault/item/field
-    capabilities: [plan, implement, review, orchestrate, research]
-    tool_use: true
-    structured_output: true
-    context_tokens: 200000
-    cost: { class: subscription, notes: "Claude plan" }      # subscription | free | paid-per-token
-    privacy: { data_leaves_host: true, provider_retention: "per Anthropic terms" }
-    health: { check: "claude auth status", last_ok: null }
-    use_cases: [lead, complex-implementation, planning]
-    enabled: true
-  - id: jev
-    name: Jev
-    provider: TypeSafe AI
-    kind: decision-model
-    runtime: http
-    endpoint: https://api.typesafe.ai/v1/systemone
-    auth: { method: bearer, secret_ref: "op://agents-dev/typesafe/api_key" }
-    capabilities: [typed-choice, score, yes-no]
-    tool_use: false
-    structured_output: true
-    context_tokens: null          # verify
-    cost: { class: paid-per-token, notes: "$0.042/M input, output free (reported)" }
-    privacy: { data_leaves_host: true, provider_retention: "unknown" }
-    health: { check: null, last_ok: null }
-    use_cases: [risk-scoring, routing, criteria-scoring]
-    enabled: false                # until key + approval
-```
-
-Adapter contract (one file per provider under `registry/adapters/`): `recommend(decision, criteria, evidence) -> {recommendation, confidence, assumptions[], evidence_used[], uncertainties[]}` for decision support; `decide(state, typed_questions) -> answers[]` for decision models. Both must be callable without side effects and must refuse to run when `enabled: false`.
+Approval of the direction allows planning the pilot. Credential setup, actual plan eligibility, target-repository selection, and runtime test results must be resolved before claiming the proposed gates work.

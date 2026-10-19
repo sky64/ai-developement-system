@@ -1,73 +1,102 @@
-# Compatibility matrix (Phase 1 deliverable)
+# Capability and enforcement matrix
 
-Date: 2026-10-19. Labels: **Y** supported and documented by vendor · **P** partial · **U** unverified or undocumented · **N** not available · **T** tested by me in this engagement. Sources: Cloudroom Core docs (`docs/harnesses.md`, `docs/setup.md`, `docs/api.md`), Cloudroom GUI README, ECC README and hooks, vendor docs via search for Hermes, Pi, OpenCode, Codex, TypeSafe. Items marked U need the audit kit output or a Phase 2–4 test.
+Updated 2026-10-19 for the revised [architecture proposal](01-architecture-proposal.md). Replaces the earlier vendor-wide matrix, which mixed historical documentation with tests from a different environment.
 
-## A. Harness × platform
+Labels: **Observed** = current CLI/API inspection; **Documented** = linked vendor feature; **Proposed** = intended configuration; **Untested** = behavioral proof required. Absence of evidence is not proof of unsupported behavior.
 
-| Capability | Claude Code | Codex | OpenCode | Hermes | Pi |
-|---|---|---|---|---|---|
-| Cloudroom Core adapter | Y (stream JSON; 2.1.280+ for Opus 5.5) | Y (default harness) | Y (ACP; v1 and v2 tested by vendor) | **U** (named in README and API enum, no adapter section) | Y (rpc mode; ≥0.85.1) |
-| Cloudroom Local thread (desktop app) | Y | Y | Y (GUI provider `acp-opencode`) | U | Y |
-| Runs on Linux host without Cloudroom | Y | Y | Y | Y | Y |
-| Auth model on a Cloud host | Browser sign-in + one-time code, as agent user | `codex login --device-auth`, as agent user | `opencode auth login`, as agent user | Provider key or Nous Portal | Provider keys via `room-cli cloud pi key` or Mac sync |
-| Uses your existing subscription | Y (Claude plan) | Y (ChatGPT plan) | P (free `opencode/*` models; else BYO keys) | N (needs a model provider; may be paid) | N (BYO keys) |
-| Cloudroom Command Guard | Y | Y | N (not advertised over ACP) | U | Y |
-| Pre-action hooks (own system) | Y (PreToolUse etc.) | P (hooks exist; no Claude parity) | P (`permission` config; plugins) | P (approvals system; container backends bypass) | P (TypeScript extensions) |
-| Reads `AGENTS.md` | P (via `CLAUDE.md` import) | Y | Y | U | U (extension or system prompt) |
-| Skills (Markdown) | Y (SKILL.md; Cloudroom loads selected skills) | P | P (ECC catalog subset) | P (Hermes skills) | P (extensions) |
-| Subagents / delegation | Y (subagents; Cloudroom child threads via in-process MCP) | P (Cloudroom child threads) | N (not advertised over ACP) | U | U |
-| MCP | Y | Y | Y | U | P (via extension) |
-| Structured output | Y | Y | Y | U | U |
-| Session resume after Core restart | Y | Y | Y (ACP `session/load`) | U | U |
-| ECC support (per ECC README) | Stable, primary | Native plugin, no hook parity | Beta plugin, catalog subset | Experimental | Adapter mentioned, status unverified |
+## A. Current baseline
 
-## B. Mobile (iPhone) × harness
+| Item | Evidence | Status / limit |
+|---|---|---|
+| Cloudroom CLI | `room-cli --version` → 0.43.1 | Observed; does not establish app/Core or provider versions |
+| Execution context | `room-cli status --json` → Project checkout | Observed for this session only; no sandbox assumed |
+| Permission interface | `thread spawn --help` exposes permission mode; `thread interactions --help` exposes approve/deny/answer/grant | Observed interface; provider/mode behavior Untested |
+| Delegation | Spawn help exposes parent and environment options | Observed interface; use Cloudroom child threads, verify target/mode and isolation before launching |
+| Recovery interface | Stop and queue commands in installed help | Observed interface; stop completion, descendants, processes, and resume Untested |
+| GitHub actor | `gh api user` → `sky64` | Observed; owner identity currently available to this agent |
+| Existing PR actor | PR #1 author is `sky64` | Observed; cannot demonstrate separate human review |
+| Repository visibility | GitHub API → private | Observed |
+| Current main protection | Classic protection absent; effective branch rules empty | Observed; no current merge gate demonstrated |
+| Application/plan | Not selected/verified in this revision | Untested; prerequisite for implementation |
 
-| Need | Claude Code | Codex | OpenCode | Hermes | Pi | Cloudroom (platform) | GitHub |
-|---|---|---|---|---|---|---|---|
-| View running sessions | **Y, T** (Claude app, cloud sessions and Remote Control) | P (ChatGPT app, macOS desktop sessions only) | N | P (chat gateway) | N | Hosted: mobile web app (reported, **U**); self-hosted: dashboard JSON only | N/A |
-| Read progress summaries | Y, T | P | N | Y (chat) | N | U | Y (PR descriptions, `docs/progress.md`) |
-| Answer agent questions | **Y, T** | P (macOS only) | N | Y (chat) | N (dialogs cancelled under Cloudroom) | U | Y (PR comments) |
-| Approve / reject a proposed action | **Y** (permission prompts in app; iOS rendering bugs reported Feb–Apr 2026, closed) | P (macOS only) | N | Y (once/session/always/deny in chat; 60 s default timeout) | N | U (changelog: approvals for agent/automation-initiated turns; Terms say no prompts) | **Y** (PR review, Environment deployment approval) |
-| Push notifications | Y (Claude app) | P | N | Y (Telegram etc.) | N | U | Y (GitHub app) |
-| Review tests and builds | N | N | N | P (summaries) | N | N | **Y** (Actions, checks) |
-| Send follow-up instructions | Y, T | P | N | Y | N | U | Y (PR comment, if an agent watches the PR) |
+Do not commit raw authentication output or tokens. Capture only the identity, scopes/permissions, versions, configuration metadata, and redacted results necessary to assess a boundary.
 
-Conclusion: the dependable mobile plane today is **Claude app + GitHub app**, with Hermes chat as an optional third channel. Cloudroom's own mobile and approval features must be tested in Phase 4 before any claim.
+## B. Pilot runtime tests
 
-## C. Decision providers
+Fill a separate result record for each provider × execution mode actually selected. Do not transfer results between a local checkout and a cloud sandbox.
 
-| Field | Jev (TypeSafe AI) | Ting Cactus | Claude / Codex / OpenCode as recommenders |
+| Capability | Claude Code | Codex | Passing evidence |
 |---|---|---|---|
-| Identity verified | Y (official docs via search; site unreachable from this container) | **N: not found** | Y |
-| Runtime | HTTPS API | — | Existing CLIs |
-| Auth | Bearer `TYPESAFE_API_KEY` | — | Existing logins |
-| Output | Typed answers + calibrated probabilities (Choice / Score / Noul) | — | Free text; structured via prompt or output schema |
-| Tool use | N | — | Y |
-| Context | Text only; limit unverified | — | Harness-dependent |
-| Cost | Paid per token (reported $0.042/M input); early access | — | Covered by subscriptions / chosen models |
-| Privacy | Data leaves host; retention unverified | — | Per provider terms |
-| Status in registry | Entry, `enabled: false` | No entry | Enabled |
+| Authentication and harmless task | Untested in pilot runtime | Untested in pilot runtime | Exact version, model, mode, task output; no token values |
+| Shared instructions | Proposed | Proposed | Demonstrate relevant project instructions are discovered |
+| Filesystem boundary | Untested | Untested | Dummy fixtures inside/outside allowed paths; mounts and credentials inspected |
+| Approval and denial | Untested | Untested | Harmless interaction allowed/denied with actual permission mode |
+| Independent review | Implementer | Proposed reviewer | Separate context, specified base/head SHAs, reproducible findings |
+| Child-thread handoff | Proposed | Proposed | Cloudroom-managed thread references and explicit ownership |
+| Stop/restart/queue handling | Untested | Untested | Verified cessation, queue inspection, explicit resume without duplicate effects |
+| Usage/time controls | Untested | Untested | Supported hard limits identified; otherwise attended operation only |
 
-## D. Security controls × layer
+Cloudroom's current CLI advertises interactions. That is grounds to test them, not to claim universal approval support. Harness hooks, skill discovery, and sandboxing require separate checks.
 
-| Control | Cloudroom Core | GitHub | 1Password | Harness hooks |
-|---|---|---|---|---|
-| Agent cannot gain admin | Y (separate user, no sudo, no Docker socket by guidance) | — | — | — |
-| Agent cannot read platform secrets | Y (token and history unreadable by agent) | — | Y (scoped read-only service account; keys injected at start) | — |
-| Private network only | Y (loopback; Tailscale `serve`) | — | — | — |
-| Merge requires human | — | Y (branch protection, CODEOWNERS) | — | — |
-| Deploy requires human | — | Y (Environments, required reviewers) | — | — |
-| Destructive command block | P (Command Guard, regex) | — | — | P (ECC GateGuard, Claude deny rules, OpenCode permission) |
-| Audit trail | Y (history, events) | Y (PR, review, deployment logs) | Y (service account activity) | P (hook logs) |
-| Sandbox | **N** (explicitly not a sandbox) | — | — | Codex workspace-write sandbox (P) |
+## C. Phone interfaces
 
-## E. Unknowns to resolve with the audit kit
+| Channel | Intended role | Evidence required |
+|---|---|---|
+| GitHub app/mobile web | Human review, checks, merge | Owner approves a new PR authored by the restricted agent identity |
+| Cloudroom mobile web | Monitor and interact with supported threads | Verify access for the actual installation, question response, approval, denial, and stop |
+| Claude app/Remote Control | Optional Claude-specific monitoring/interactions | Verify the actual session is reachable and permission prompts work; do not assume a Cloudroom session automatically appears |
+| Other harness apps/chat gateways | Deferred | Add only if a verified requirement remains unmet |
 
-1. Cloudroom mode in use (Local app / hosted Cloud / self-hosted Core) and app version (v83+ needed for "Connect your own Core").
-2. `codex login status` on the machine that runs Codex threads.
-3. ECC route and duplicates in `~/.claude`, `~/.codex`, `opencode.json`.
-4. Hermes config: `approvals.mode`, gateway platforms, backend (local vs container).
-5. Pi providers present and extensions directory.
-6. GitHub auth identity and scopes used by agents (`gh auth status`).
-7. 1Password CLI presence and plan tier (service accounts need Teams/Business).
+No phone-action path has been tested during this revision. Required-reviewer deployment approval is conditional on repository plan eligibility and is outside the pilot. CLI support does not establish mobile delivery or push notifications.
+
+## D. Enforcement and plan prerequisites
+
+| Requirement | Mechanism | Current status / limitation |
+|---|---|---|
+| Human approval before merge | Restricted agent identity + required owner review + no agent rule editing/bypass | Proposed; current actor is the owner |
+| Private-repo branch protection | Eligible GitHub plan | Documented; actual eligibility Untested |
+| No self-approval of PR | Distinct human and agent actors | Documented GitHub restriction; PR #1 is a bootstrap artifact |
+| Deployment approval | Eligible Environment reviewers, separately verified platform gate, or owner-only manual deployment | Deferred; Environment reviewers are public-only on Free/Pro/Team |
+| Production isolation | Credentials and execution inaccessible to dev agents | Proposed; check helpers, connectors, mounts, env, and network |
+| Local file protection | Runtime/OS boundary with actual permission mode | Untested; branches/worktrees are Git separation only |
+| Secrets management | Scoped dev credentials, optionally 1Password | Deferred as needed; receiving process can read injected secrets |
+| Provider restriction | Runtime/external egress policy if required | No enforcement demonstrated; a registry flag is insufficient |
+| Cost bound | Verified provider/runtime cap | Untested; missing billing login does not prevent API usage charges |
+| Destructive-action prevention | OS/runtime restrictions plus supporting hooks | Untested; regex hooks are accident prevention |
+| ECC duplicate prevention | Ownership inventory and resolved hook registrations | Untested; directories/counts alone are insufficient |
+
+## E. Deferred capabilities
+
+| Component | Later purpose | Before adoption |
+|---|---|---|
+| OpenCode | Alternative implementation/provider experiments | Confirm current adapter, auth, instructions, permissions, and cost |
+| Hermes | Persistent assistance or chat operations | Establish a need beyond Cloudroom's scheduling tools; verify service isolation and gateway permissions |
+| Pi | Task-specific extension | Demonstrate a task the initial harnesses cannot handle simply |
+| Jev / other decision models | Structured decision support | Verify identity, access, pricing, privacy, and value on a real decision |
+| Parallel implementers | Independent task throughput | Verify workspaces, shared resources, resource limits, and merge coordination |
+
+These rows record possible roles, not verified vendor compatibility. The pilot does not require their installation or credentials.
+
+## F. Evidence record template
+
+For each runtime or permission test, record:
+
+- Date, target repository, disposable fixtures, and task/thread reference.
+- App/CLI, harness and model versions; execution and permission modes.
+- Authenticated actor and effective permissions without secrets.
+- Expected result, observed result, and redacted supporting output.
+- What the test does not establish, residual risk, and operator/next action.
+- Commit SHA and review/check links where relevant.
+
+Use the PR/issue for task evidence; this matrix is the capability baseline. Failed or incomplete tests stay visible.
+
+## Sources checked for this revision
+
+- Installed `room-cli` 0.43.1: status, spawn, interactions, stop, and queue help; interfaces inspected without launching threads.
+- GitHub API: repository visibility, current actor, PR #1 author, main protection, and effective branch rules.
+- [GitHub protected branches and plan eligibility](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+- [GitHub review rules, including author self-approval restriction](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews).
+- [GitHub Environments, plan restrictions, self-review and bypass settings](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
+- [1Password runtime secret injection](https://developer.1password.com/docs/cli/reference/commands/run/).
+
+Historical vendor research remains in [00](00-audit-and-architecture-proposal.md) for context, not as current compatibility proof.

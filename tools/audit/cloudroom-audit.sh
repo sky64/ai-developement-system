@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # cloudroom-audit.sh : READ-ONLY inventory of a machine that runs Cloudroom and/or coding-agent CLIs.
 #
-# - Makes no changes. Installs nothing. Never prints secret values: only names, paths, counts, versions.
+# - Makes no changes and installs nothing. Preliminary inventory, not a security audit.
+# - CLI/config status output may include sensitive account details; review locally before sharing.
 # - Run on each machine involved (Omarchy workstation, Mac with the Cloudroom app, Cloudroom Core host):
 #       bash tools/audit/cloudroom-audit.sh > audit/$(hostname)-$(date +%F).txt
 # - Review the output before sharing. Then commit it under audit/ or paste it into the session.
@@ -108,11 +109,11 @@ print("  enabledPlugins:", ", ".join(k for k,v in ep.items() if v) or "none")
 print("  extraKnownMarketplaces:", ", ".join(mk.keys()) or "none")
 print("  hooks by event:", {k:len(v) for k,v in hk.items()} if hk else "none")
 txt=json.dumps(hk)
-print("  ECC-owned hook IDs present:", "yes" if "ecc" in txt.lower() else "no")
+print("  Hook config mentions ECC (ownership unverified):", "yes" if "ecc" in txt.lower() else "no")
 PY
 fi
 ls -d "$HOME"/.claude/plugins/cache/*ecc* "$HOME"/.claude/plugins/*/ecc* 2>/dev/null | sed 's/^/  plugin dir: /'
-printf 'Manual copy route (should NOT coexist with plugin):\n'
+printf 'Local skill/agent entries (ownership and duplicate registrations need inspection):\n'
 count "$HOME/.claude/skills"
 ls "$HOME/.claude/skills" 2>/dev/null | head -40 | tr '\n' ' ' | sed 's/^/  skills: /'; echo
 count "$HOME/.claude/agents"
@@ -159,4 +160,4 @@ for root in "$HOME/code" "$HOME/src" "$HOME/projects" "$HOME/dev" "$HOME/Develop
 done
 
 hr "done"
-printf 'Review this output for anything sensitive before sharing. No values were printed by design.\n'
+printf 'Review CLI/config output for sensitive details before sharing. Counts do not prove duplicate installs.\n'

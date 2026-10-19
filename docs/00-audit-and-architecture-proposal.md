@@ -1,6 +1,6 @@
 # Multi-agent development environment on Cloudroom: audit and architecture proposal
 
-Status: **DRAFT, awaiting approval**. Note (2026-10-19, after the implementation brief): section 3 of this document is superseded by `01-architecture-proposal.md`; the approval-relay design in 3.3 is withdrawn in favour of native GitHub, Claude and Hermes controls. Sections 1 and 2 (audit and capability verification) remain current. Nothing has been installed, no credentials changed, no existing configuration modified.
+Status: **HISTORICAL AUDIT; NOT THE CURRENT ARCHITECTURE.** The complete architecture and capability interpretation in this file are superseded by the [revised proposal](01-architecture-proposal.md) and [capability matrix](02-compatibility-matrix.md), updated 2026-10-19. Preserve this file as a record of the original session; its environment, vendor claims, estimates, and questions are not current verification or an implementation checklist. The approval relay was withdrawn, and the five-harness rollout is deferred. No installation or credential changes are authorized by this historical document.
 Date: 2026-10-19. Author: Claude (lead architect role), for kd@sky64.io.
 
 This document has three parts:
