@@ -1,8 +1,8 @@
 # Architecture proposal — Cloudroom development workflow
 
-Status: **REVISED PROPOSAL; implementation has not started.** Updated 2026-10-19 after independent review. This document replaces the earlier architecture in full. [00](00-audit-and-architecture-proposal.md) is a historical audit; [02](02-compatibility-matrix.md) records current evidence and untested capabilities.
+Status: **REVISED PROPOSAL; project instructions added, pilot not yet run.** Updated 2026-10-19 after independent review. This document replaces the earlier architecture in full. [00](00-audit-and-architecture-proposal.md) is a historical audit; [02](02-compatibility-matrix.md) records current evidence and untested capabilities.
 
-The first milestone is one real task through Claude implementation, independent Codex review, CI, owner approval, and merge in one application repository. OpenCode, Hermes, Pi, and decision models remain future options.
+The first milestone is one real task through Claude implementation, independent Codex review, CI, owner approval, and merge in one repository. This setup repository is the initial workspace; another application repository is optional. OpenCode, Hermes, Pi, and decision models remain future options. See the [setup record](03-cloudroom-setup.md) for the instruction foundation and current provider checks.
 
 ## 1. Evidence and unresolved prerequisites
 
@@ -16,7 +16,7 @@ Observed in the project checkout on 2026-10-19:
 | CLI exposes `--permission-mode`, approval interactions, child-thread options, and stop/queue commands | Test provider × execution mode; do not claim all Cloudroom agents run without prompts |
 | `gh api user` reports `sky64`; PR #1 is authored by `sky64` | Current agent access is not separated from the owner's identity |
 | This repository is private; classic protection API reports unprotected and effective branch rules for `main` are empty | Approval gates are proposed, not already enforced |
-| Application target, GitHub plan, runtime isolation, and mobile behavior are unverified | Resolve these before the first milestone |
+| Pilot task, GitHub plan, runtime isolation, and mobile behavior are unverified | This repository can host the initial setup task; verify the remaining prerequisites |
 
 The original audit ran in a different environment. Its versions, authentication findings, and platform descriptions must not be treated as the current workstation inventory. The existing audit script is a preliminary inventory only: its CLI output needs review before sharing, and directory counts cannot establish duplicate ECC installations.
 
@@ -166,10 +166,11 @@ Before any ECC cleanup, inventory source/version, install manifests, enabled plu
 
 For the pilot, keep working configuration. Add only skills needed for the selected task; no blanket reinstall or global migration is required. If importing skills later, preserve license/attribution, pin their source, and test discovery per harness. Reading `AGENTS.md` does not prove full hook or skill portability.
 
-### 8.2 Minimum application layout
+### 8.2 Minimum project layout
 
 ```text
-<application>/
+<project>/
+├── .bb/AGENTS.md                Cloudroom entry point referring to AGENTS.md
 ├── AGENTS.md                    shared workflow and conventions
 ├── CLAUDE.md                    Claude-specific additions/import, if needed
 ├── docs/
@@ -182,13 +183,13 @@ For the pilot, keep working configuration. Add only skills needed for the select
 └── existing source and tests
 ```
 
-Reuse existing repository conventions. This system repository holds the proposal and audit tools; application templates and configuration are future implementation work. Do not create empty policy files, adapter directories, or a parallel task store merely to match a diagram.
+Reuse existing repository conventions. This system repository now holds the shared instruction foundation, setup record, proposal, and audit tools. Cloudroom's installed guide documents .bb/AGENTS.md as the provider-neutral entry point; it refers to the canonical root AGENTS.md, and CLAUDE.md imports that root file. Application-specific templates can follow later. Do not create empty policy files, adapter directories, or a parallel task store merely to match a diagram.
 
 ## 9. Milestones, cost, and acceptance
 
 | Milestone | Scope | Exit evidence |
 |---|---|---|
-| A. Establish prerequisites | Choose one application; verify plan, separate GitHub identity, runtime boundaries, existing checks, and supported limits | Redacted capability/permission record; owner configures gates |
+| A. Establish prerequisites | Use this setup repository first; verify plan, separate GitHub identity, runtime boundaries, relevant checks, and supported limits | Redacted capability/permission record; owner configures gates |
 | B. Prove one task | Claude implements; Codex independently reviews; CI runs; owner approves and merges | Task, PR, final reviewed SHA, approval, CI and merge evidence |
 | C. Exercise failure/recovery | Reject unauthorized push/merge, fail CI, interrupt a task, simulate provider unavailability, resume safely | Disposable test evidence and documented residual risks |
 | D. Verify mobile operation | Test the chosen phone interfaces with the actual providers/mode | Per-action pass/fail record; no inference from CLI help |
@@ -210,6 +211,6 @@ Jev, “Ting Cactus,” and Laya remain research candidates from the historical 
 
 ## 11. Implementation boundary
 
-This revision updates proposal documentation and audit inventory labels only. It does not provision agent identities, alter branch rules, install or remove ECC, change runtime permissions, start other agents, merge the PR, or enable deployment.
+The repository now contains shared project instructions, the setup record, revised proposal, and audit inventory labels. This foundation does not provision agent identities, alter branch rules, install or remove ECC, change runtime permissions, start other agents, merge the PR, or enable deployment.
 
-Approval of the direction allows planning the pilot. Credential setup, actual plan eligibility, target-repository selection, and runtime test results must be resolved before claiming the proposed gates work.
+Approval of the direction allows planning the pilot. Credential setup, actual plan eligibility, pilot-task selection, and runtime test results must be resolved before claiming the proposed gates work.

@@ -17,9 +17,11 @@ Labels: **Observed** = current CLI/API inspection; **Documented** = linked vendo
 | Existing PR actor | PR #1 author is `sky64` | Observed; cannot demonstrate separate human review |
 | Repository visibility | GitHub API → private | Observed |
 | Current main protection | Classic protection absent; effective branch rules empty | Observed; no current merge gate demonstrated |
-| Application/plan | Not selected/verified in this revision | Untested; prerequisite for implementation |
+| Pilot repository/plan | This setup repository is the first workspace; plan not verified | Another application repo is optional; gate eligibility remains a prerequisite |
 
 Do not commit raw authentication output or tokens. Capture only the identity, scopes/permissions, versions, configuration metadata, and redacted results necessary to assess a boundary.
+
+The [setup record](03-cloudroom-setup.md) adds later observations: both CLIs are installed and signed in, and the worktree provider reports available. Those checks do not establish a model run, worktree creation, or handoff.
 
 ## B. Pilot runtime tests
 
@@ -28,7 +30,7 @@ Fill a separate result record for each provider × execution mode actually selec
 | Capability | Claude Code | Codex | Passing evidence |
 |---|---|---|---|
 | Authentication and harmless task | Untested in pilot runtime | Untested in pilot runtime | Exact version, model, mode, task output; no token values |
-| Shared instructions | Proposed | Proposed | Demonstrate relevant project instructions are discovered |
+| Shared instructions | CLAUDE.md imports AGENTS.md; .bb/AGENTS.md entry point added | Root AGENTS.md and .bb/AGENTS.md entry point added | Files present; actual next-session discovery Untested |
 | Filesystem boundary | Untested | Untested | Dummy fixtures inside/outside allowed paths; mounts and credentials inspected |
 | Approval and denial | Untested | Untested | Harmless interaction allowed/denied with actual permission mode |
 | Independent review | Implementer | Proposed reviewer | Separate context, specified base/head SHAs, reproducible findings |
