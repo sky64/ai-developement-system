@@ -14,8 +14,8 @@ This repository is the setup workspace for the installed Cloudroom app. Another 
 | Codex authentication | CLI reports logged in using ChatGPT |
 | Worktree environment | Registered and reports available for this project/machine; creation not tested |
 | Other providers | Pi, OpenCode, Hermes and others are registered; not needed for this first setup |
-| Shared project instructions | Added to this repository; next-session consumption not yet demonstrated |
-| Claude → Codex handoff | Not yet exercised |
+| Shared project instructions | Consumed by Claude (CLAUDE.md, AGENTS.md, .bb/AGENTS.md) and by Codex (.bb/AGENTS.md, AGENTS.md) in the [smoke test](04-smoke-test.md) |
+| Claude → Codex handoff | Exercised once on 2026-10-19: local commit, Codex child in a Worktree, findings returned to the lead. See the [smoke test](04-smoke-test.md). No deadline was recorded; the lead ran in the checkout, not a Worktree. |
 | Permission/stop/mobile tests | Not yet exercised |
 | Restricted agent GitHub identity and merge gate | Not configured by this setup |
 

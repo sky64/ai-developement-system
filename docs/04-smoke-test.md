@@ -11,6 +11,7 @@ Date: 2026-10-19. Requested by the owner in Cloudroom thread thr_nveh5eysxj. Sco
 | Worktree | Not used for the lead. The suggested procedure was a Claude thread in a Worktree; the prompt was sent to the existing checkout thread instead. Recorded as a deviation, not hidden. |
 | Permission mode | The harness reported bypass-permissions (Cloudroom `full`) for this turn. The machine ceiling is `full`. Nothing about this run proves a lower mode would have blocked anything. |
 | Runtime limits | None enforced. The run was attended by the owner. Retry allowance: two per failed operation, per AGENTS.md. |
+| Deadline | None was set before the run. AGENTS.md requires one. Recorded as a deviation; the reviewer caught it (see Result). |
 | Reviewer | One Codex child thread, spawned through room-cli with `--parent-self`, in a fresh Worktree based on this branch so it sees the committed file without a push. Model: the Codex default on this machine. |
 
 ## Project instructions loaded
@@ -31,7 +32,7 @@ The global ECC rules tell the agent to start native subagents immediately (plann
 ## How the handoff works
 
 1. Claude reads `AGENTS.md` and the setup record, makes the change in its environment, and commits it locally. The commit SHA is the review target.
-2. Claude records scope, runtime, permission mode, deadline, limits, and retry allowance (the table above) before starting the reviewer.
+2. Claude records scope, runtime, permission mode, deadline, limits, and retry allowance before starting the reviewer. In this run the table above was written without a deadline.
 3. Claude starts exactly one Codex child thread:
 
    ```sh
@@ -68,4 +69,25 @@ Those remain open in the [capability matrix](02-compatibility-matrix.md).
 
 ## Result
 
-Pending at the time of this commit. The reviewer's findings and the final verdict are added in a follow-up commit so the reviewed SHA stays fixed.
+Reviewer: Cloudroom thread thr_pwtuszetdh, provider codex, model gpt-6.1-sol, reasoning high, Worktree at `~/.gui-cloudroom/plugins/environment-git-worktree/host-data/worktrees/thr_pwtuszetdh-1/ai-developement-system` on branch `room/codex-review-smoke-test-commit-e30f857-etdh`. Reviewed SHA: e30f857.
+
+Codex reported that it received `.bb/AGENTS.md` through Cloudroom's injected workspace instructions and the root `AGENTS.md` as user-provided instructions, and that `CLAUDE.md` was not loaded automatically. That is the expected split: `CLAUDE.md` is Claude's native import; the shared text reaches Codex through the Cloudroom entry point.
+
+Codex verified HEAD, the single-file diff, `git diff --check`, the two relative links, the code fence, that the documented spawn flags exist, and that the file does not claim permission enforcement, identity separation, or merge gates. Its worktree was left clean at e30f857.
+
+Findings from Codex:
+
+- Medium, docs/04-smoke-test.md step 2: the text said a deadline was recorded, but the run record had none. AGENTS.md requires a recorded deadline and a stop at it. Resolved in this follow-up by recording the omission in the run record and correcting step 2. The underlying gap stands: no deadline was set for this run.
+
+Codex's stated limitations: it could not independently confirm Claude's startup load order, global-rule consumption, permission mode, or owner attendance. Those are lead-reported.
+
+Pass criteria:
+
+| Criterion | Outcome |
+|---|---|
+| Claude loads the shared instructions | Pass, lead-observed (see list above) |
+| Change made in the lead's own worktree | Deviation. The lead ran in the project checkout; only the reviewer used a Worktree. |
+| Codex independently reviews the correct commit | Pass. Fresh thread, fresh Worktree, correct SHA, Codex also received the shared instructions. |
+| Claude receives and reports Codex's findings | Pass. Cloudroom delivered the child's final message to the lead thread, and `room-cli thread output thr_pwtuszetdh` returned the same text. |
+
+Correction cycles used: one of two. Retries used: none. The reviewer thread was left open for the owner to inspect; archiving it releases its Worktree.
