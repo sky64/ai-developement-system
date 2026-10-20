@@ -15,11 +15,11 @@ ECC agents are used for reading, planning, and pre-review. Any agent that writes
 
 ## Enforcement
 
-`tools/hooks/orchestrator-guard.py` is a Claude Code PreToolUse hook wired in `.claude/settings.json`. In the main checkout it blocks Edit, Write, MultiEdit, NotebookEdit, and Bash commands that write files or mutate Git. In a Git worktree it allows them. Unit test: `bash tools/hooks/test-orchestrator-guard.sh`.
+`tools/hooks/orchestrator-guard.py` is a Claude Code PreToolUse hook wired in `.claude/settings.json`. In the main checkout it blocks Edit, Write, MultiEdit, NotebookEdit, and Bash commands that write files or mutate Git. The Bash check splits the command into simple commands at `;`, `&&`, `||`, `|`, newlines, subshells and command substitution, then inspects each: Git is denied for mutating subcommands after skipping global options such as `-c` and `--git-dir`, and `tag`, `branch`, `stash`, `worktree`, `remote`, `config` and `submodule` are allowed only in their listing or `--get` forms; `sed -i` anywhere in the arguments, file-writing utilities, Python write calls, and redirects outside `/dev/null` and `/tmp` (without `..`) are denied. A single plain `room-cli` command with no shell operators is exempt. In a Git worktree, Bash is not checked, and the file write tools are allowed only when the real path of the target is inside the real path of the worktree. Malformed hook input is denied. Unit test: `bash tools/hooks/test-orchestrator-guard.sh`.
 
 What this is and is not:
 
-- The worktree separation is the boundary that holds. The orchestrator never has a branch of its own to write to.
+- Worktrees are workspace separation, not a write boundary. A session in a worktree can write any path the OS user can, including the main checkout; the hook's path check narrows that for the file write tools only. No enforced write boundary exists yet. One would need OS-user separation or a Cloud sandbox per implementer.
 - The Bash check is pattern based. A determined agent can route around it. It is a tripwire that turns silent drift into a visible denial.
 - `ORCHESTRATOR_GUARD=off` disables it for a human session. That is a convention.
 - Codex threads do not run Claude Code hooks. The reviewer's read-only status rests on its prompt and on review of its worktree diff.
