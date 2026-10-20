@@ -1,6 +1,6 @@
 # ai-developement-system
 
-Project configuration for the existing Cloudroom installation: Claude leads implementation, Codex independently reviews, and the owner handles approval and merge.
+Project configuration for the existing Cloudroom installation: Claude orchestrates without writing code, specialist agents implement in Cloudroom worktrees, Codex independently reviews, and the owner handles approval and merge. Policy: [docs/05-delegation.md](docs/05-delegation.md).
 
 Start with the [Cloudroom setup record](docs/03-cloudroom-setup.md). This repository is the setup workspace; another application repository is not required. Shared instructions are in [AGENTS.md](AGENTS.md), wired through [.bb/AGENTS.md](.bb/AGENTS.md) for Cloudroom and [CLAUDE.md](CLAUDE.md) for Claude.
 

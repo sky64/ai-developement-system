@@ -8,11 +8,11 @@ Read README.md and docs/03-cloudroom-setup.md for the current setup state. The a
 
 ## Roles and delegation
 
-- Claude Code is the default lead and implementer; Codex is the independent reviewer. Explicit user assignments take precedence.
-- Do not automatically start agents. When the user explicitly requests delegation or an implementation-and-review run, use Cloudroom child threads through room-cli.
-- Never use native harness subagents or launch agent CLIs from shell scripts to delegate.
-- Keep a task to one implementer and one reviewer. Assign each worker its files, acceptance criteria, base commit, and limits.
-- Use Cloudroom-managed worktrees for concurrent edits. A worktree separates Git state; it does not establish an OS sandbox.
+- Claude Code is the orchestrator and does not write code or commit. Codex is the independent reviewer. Explicit user assignments take precedence.
+- Every change is implemented by a specialist agent chosen by the procedure in docs/05-delegation.md. Generalists only for simple tasks. If no specialist exists, author one first.
+- Implementers and reviewers run as Cloudroom child threads through room-cli, each in its own worktree. Keep a task to one implementer and one reviewer. Assign each worker its files, acceptance criteria, base commit, and limits.
+- ECC plugin agents may be started in-process for read-only work: planning, exploration, pre-review. Never for writing. Never launch agent CLIs from shell scripts to delegate.
+- A Claude Code hook in .claude/settings.json blocks writes in the main checkout. It is a tripwire, not a security boundary; the worktree separation is the boundary.
 - Inspect or message only the current task's threads when authorized, not unrelated threads.
 
 ## Work and review
