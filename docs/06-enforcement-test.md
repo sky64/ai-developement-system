@@ -38,7 +38,7 @@ Required by [05-delegation.md](05-delegation.md) before any child starts.
 ## Limitations found
 
 - The project guard and the machine-wide ECC pre-bash hook both pattern-match words inside quoted prompt text. The orchestrator was denied two `room-cli thread spawn` commands because their prompts contained write-like words.
-- The project guard exempts a single plain `room-cli` command with no shell operators. Since review cycle 1, a prompt argument containing `;`, `&`, `|`, a backtick, `$(` or a newline loses the exemption and goes through the normal Bash check. The ECC hook has no exemption, so the denial can still come from the machine-wide hook.
+- The project guard exempts a single plain `room-cli` command with no shell operators. Since review cycle 2 the check is quote aware, so a quoted prompt argument containing `;`, `&`, `|` or a newline keeps the exemption; a prompt containing `$(` or a backtick, even quoted, is a parse failure and denies. The ECC hook has no exemption, so the denial can still come from the machine-wide hook.
 
 ## What the test proves
 
@@ -71,3 +71,20 @@ Codex review thread thr_v3s26gxxrp reviewed 47c6165..c2dc985 on 2026-10-20. Corr
 | P2 | The selection record said no skills beyond conventions although the agent definition names two. | Selection record lists ecc:git-workflow and ecc:coding-standards and states which thread loaded them. |
 
 Still true after this cycle: the Bash check is pattern based and bypassable, Codex threads run no Claude hooks, and no GitHub gate was tested.
+
+## Review cycle 2
+
+Codex review thread thr_ue9kwf35yv reviewed c2dc985..f976bb3 on 2026-10-20. Correction cycle 2 of 2 was implemented by docs-engineer in thread thr_uz2kcxdctx on branch `room/implementer-guard-correction-cycle-2-doc-dctx`, base f976bb3. Each finding below has unit cases in `tools/hooks/test-orchestrator-guard.sh`; the suite grew from 74 to 150 cases.
+
+| Severity | Finding | Fix |
+|---|---|---|
+| P2 | Shell parsing was not quote aware: `room-cli --version&git add README.md`, `git -c "user.name=A;B" commit -m x` and `"git" commit` all passed. | The whole command is tokenized once with `shlex` in POSIX mode with `;&|()<>` and newline as punctuation; the token stream is split into simple commands on operator tokens; quotes are stripped from the command name; any token containing `$(` or a backtick, an unterminated quote, an unknown operator run or a redirect without a target is a parse failure and denies. |
+| P2 | `git remote -v add` passed because only the first argument was checked. | `remote`, `tag`, `branch`, `stash`, `worktree`, `config` and `submodule` check every argument: all options must be in the read-only set for the subcommand and the verb or positional form must be a read form. `remote` allows no arguments, `-v`, `--verbose`, `show` and `get-url`. |
+| P2 | Read-only false positives: `git config get`, `git config --get` with `--file`, `--global` or `--system`, `git config --show-origin`, and read-only subcommands not named in the hook. | `config get`, `config list`, `--get` with scope or file flags and `--show-origin` are allowed. `merge-base`, `rev-list`, `rev-parse`, `ls-files`, `ls-tree`, `ls-remote`, `blame`, `describe`, `name-rev`, `cat-file`, `for-each-ref`, `shortlog`, `reflog`, `check-ignore`, `status`, `log`, `show`, `diff`, `grep`, `count-objects`, `var`, `help` and `version` are allowed explicitly; any Git subcommand outside the allow, deny and per-subcommand tables is now denied. |
+| P2 | Partial fix from cycle 1: the attached ampersand and a quoted global option value hiding a subcommand were still missed. | Covered by the tokenizer above; both have unit cases. |
+| P2 | The redirect check ran on raw text, so `grep -n "x>y"` was a write. | Output redirects are checked on the token stream; only `>`, `>>`, `&>`, `&>>` and `>|` operator tokens count, and their targets must be `/dev/null`, `/tmp` or `$TMPDIR` without `..`. |
+| P3 | A Bash call with a missing or null command was allowed. | A non-string `command` denies with a diagnostic. |
+
+Known cost of the stricter parse: `$(…)` and backticks are denied even inside quotes and even when the substituted command is read-only, so `echo "$(git rev-parse HEAD)"` is denied. The orchestrator runs such commands in two steps.
+
+The review budget of two cycles is now spent. Remaining findings go to the owner.

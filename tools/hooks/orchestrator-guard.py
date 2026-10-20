@@ -14,6 +14,13 @@ Decision rules:
   inside the real path of cwd. Bash is not checked.
 - Malformed hook input (not JSON, not an object, no tool_name) is denied.
 
+Bash parsing: the whole command is tokenized once with shlex in POSIX mode
+with shell operator characters as punctuation, so quotes are respected and
+";", "&", "|", "(", ")", redirects and newlines become their own tokens. The
+token stream is split into simple commands on those operators. Command
+substitution, unterminated quotes and unknown operator runs are parse
+failures and deny.
+
 Set ORCHESTRATOR_GUARD=off to disable for a human session. That override is
 a convention, not a boundary, and so is the Bash check below. The Bash check
 is pattern based and bypassable; it is a tripwire, not a security boundary.
@@ -35,22 +42,43 @@ GIT_DENY = {
     "filter-branch", "fetch", "pull", "notes", "replace", "update-ref",
     "symbolic-ref",
 }
+# Read-only subcommands allowed with any arguments. Everything not listed
+# here, in GIT_DENY, or in the per-subcommand tables below is denied.
+GIT_ALLOW = {
+    "merge-base", "rev-list", "rev-parse", "ls-files", "ls-tree", "ls-remote",
+    "blame", "describe", "name-rev", "cat-file", "for-each-ref", "shortlog",
+    "reflog", "check-ignore", "status", "log", "show", "diff", "grep",
+    "count-objects", "var", "help", "version",
+}
 # Global git options that consume the next token as their value.
 GIT_GLOBAL_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
-# Subcommands allowed only with these flags (or no arguments at all).
-GIT_READ_ONLY_FLAGS = {
-    "tag": {"-l", "--list"},
-    "branch": {"-l", "-a", "-r", "--list", "--show-current", "--contains"},
+# Subcommands whose positional arguments mutate unless a listing flag is
+# present. Every option must be in the set.
+GIT_LISTING_FLAGS = {
+    "tag": {"-l", "--list", "-n", "--contains", "--points-at"},
+    "branch": {"-l", "-a", "-r", "--list", "--show-current", "--contains",
+               "-v", "-vv", "--verbose"},
 }
-# Subcommands allowed only when the first argument is one of these.
-GIT_READ_ONLY_FIRST_ARG = {
-    "stash": {"list", "show"},
-    "worktree": {"list"},
-    "submodule": {"status"},
+# Subcommands driven by a verb (first positional argument). Only the listed
+# verbs and options are read-only; later positionals are operands.
+GIT_READ_VERBS = {
+    "remote": ({"show", "get-url"}, {"-v", "--verbose", "-n", "--all",
+                                     "--push"}, True),
+    "stash": ({"list", "show"}, {"-p", "--patch", "--stat"}, False),
+    "worktree": ({"list"}, {"--porcelain", "-v", "--verbose"}, False),
+    "submodule": ({"status"}, {"--recursive", "--cached"}, False),
 }
-GIT_REMOTE_READ_ARGS = {"-v", "show"}
-GIT_CONFIG_SCOPE_FLAGS = {"--global", "--local", "--system", "--worktree"}
-GIT_CONFIG_READ_FLAGS = {"--get", "--get-all", "--list", "-l"}
+GIT_CONFIG_READ = {
+    "--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin",
+    "--show-scope", "--get-color", "--get-colorbool",
+}
+GIT_CONFIG_READ_VERBS = {"get", "list"}
+GIT_CONFIG_OTHER_FLAGS = {
+    "--global", "--local", "--system", "--worktree", "--file", "-f", "--blob",
+    "--type", "--bool", "--int", "--bool-or-int", "--path", "--expiry-date",
+    "--default", "--null", "-z", "--name-only", "--includes", "--no-includes",
+    "--all", "--regexp", "--value", "--fixed-value", "--url",
+}
 
 WRITE_COMMANDS = {
     "tee", "cp", "mv", "rm", "touch", "ln", "truncate", "dd", "patch",
@@ -67,47 +95,90 @@ PYTHON_WRITE_PATTERNS = [
     r"shutil\.(copy\w*|move)\(",
     r"os\.(remove|rename|unlink|replace)\(",
 ]
-# A /tmp target may not contain ".." (that could climb back out of /tmp).
-TMP_PATH = r"(?:(?!\.\.)\S)*"
-SAFE_REDIRECT_TARGETS = (
-    rf"(/dev/null|/tmp/{TMP_PATH}|\$\{{?TMPDIR\}}?{TMP_PATH})(?=[\s;&|)]|$)"
+# Shell operator characters. shlex returns runs of these as their own
+# tokens, with quoted text left intact as ordinary word tokens.
+OPERATOR_CHARS = ";&|()<>\n"
+COMMAND_SEPARATORS = {";", ";;", "&", "&&", "|", "||", "|&", "(", ")", "((",
+                      "))"}
+OUTPUT_REDIRECTS = {">", ">>", "&>", "&>>", ">|"}
+INPUT_REDIRECTS = {"<", "<<", "<<<", "<&", "<>"}
+FD_DUP = {">&"}
+# A /tmp or $TMPDIR target may not contain ".." (that could climb back out).
+SAFE_REDIRECT_TARGET = re.compile(
+    r"^(/dev/null|/tmp/(?!.*\.\.).*|\$\{?TMPDIR\}?(?!.*\.\.).*)$"
 )
-# Simple-command boundaries, including subshells and command substitution.
-SEGMENT_SPLIT = re.compile(r"\|\||&&|\$\(|[;|\n`()]")
-ROOM_CLI_COMPOUND = re.compile(r"[;&|\n`>]|\$\(")
 
 
-def strip_safe_redirects(cmd: str) -> str:
-    cmd = re.sub(r"\d?>&\d", " ", cmd)           # 2>&1
-    cmd = re.sub(r"&?>>?\s*" + SAFE_REDIRECT_TARGETS, " ", cmd)
-    return cmd
+class ShellParseError(ValueError):
+    """Command could not be parsed safely; the caller denies."""
 
 
-def is_single_room_cli(cmd: str) -> bool:
+def tokenize(cmd: str):
+    """Return the shell token stream with quotes resolved.
+
+    Raises ShellParseError on unterminated quotes and on command
+    substitution: any token containing $( or a backtick, quoted or not.
+    """
+    lex = shlex.shlex(cmd, posix=True, punctuation_chars=OPERATOR_CHARS)
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    try:
+        tokens = list(lex)
+    except ValueError as exc:
+        raise ShellParseError(f"shell parse error: {exc}") from exc
+    for i, tok in enumerate(tokens):
+        if "`" in tok or "$(" in tok:
+            raise ShellParseError("command substitution")
+        if tok == "$" and i + 1 < len(tokens) and tokens[i + 1] == "(":
+            raise ShellParseError("command substitution")
+    return tokens
+
+
+def is_operator(tok: str) -> bool:
+    return bool(tok) and all(c in OPERATOR_CHARS for c in tok)
+
+
+def split_commands(tokens):
+    """Split the token stream into (argv_lists, output_redirect_targets).
+
+    A fd number before a redirect (the 2 in 2>&1) and the operands of input
+    redirects and fd duplication are dropped from argv. Unknown operator runs
+    and a trailing redirect without a target raise ShellParseError.
+    """
+    commands, targets, current = [], [], []
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        i += 1
+        if not is_operator(tok):
+            current.append(tok)
+            continue
+        op = tok.replace("\n", "")
+        if op == "" or op in COMMAND_SEPARATORS:
+            if current:
+                commands.append(current)
+            current = []
+            continue
+        if current and current[-1].isdigit():
+            current.pop()
+        if i >= len(tokens) or is_operator(tokens[i]):
+            raise ShellParseError(f"redirect {tok!r} without an operand")
+        if op in OUTPUT_REDIRECTS:
+            targets.append(tokens[i])
+        elif op not in INPUT_REDIRECTS and op not in FD_DUP:
+            raise ShellParseError(f"unknown shell operator {tok!r}")
+        i += 1
+    if current:
+        commands.append(current)
+    return commands, targets
+
+
+def is_single_room_cli(tokens) -> bool:
     """Exempt only one plain room-cli invocation with no shell operators."""
-    stripped = cmd.strip()
-    if not (stripped == "room-cli" or stripped.startswith("room-cli ")):
-        return False
-    return ROOM_CLI_COMPOUND.search(stripped) is None
-
-
-def segments(cmd: str):
-    """Yield argv lists, one per simple command."""
-    for raw in SEGMENT_SPLIT.split(cmd):
-        try:
-            tokens = shlex.split(raw, comments=False)
-        except ValueError:
-            tokens = raw.split()
-        current = []
-        for tok in tokens:
-            if tok == "&":
-                if current:
-                    yield current
-                current = []
-            else:
-                current.append(tok)
-        if current:
-            yield current
+    return bool(tokens) and tokens[0] == "room-cli" and not any(
+        is_operator(t) for t in tokens
+    )
 
 
 def strip_wrappers(argv):
@@ -131,31 +202,57 @@ def git_subcommand(argv):
     return None, []
 
 
+def option_name(arg: str) -> str:
+    return arg.split("=", 1)[0]
+
+
+def git_listing_reason(sub, args):
+    flags = {option_name(a) for a in args if a.startswith("-")}
+    positional = [a for a in args if not a.startswith("-")]
+    if not flags <= GIT_LISTING_FLAGS[sub]:
+        return f"git {sub} with a non-listing option"
+    if positional and not flags:
+        return f"git {sub} with a positional argument and no listing flag"
+    return None
+
+
+def git_verb_reason(sub, args):
+    verbs, allowed_flags, bare_ok = GIT_READ_VERBS[sub]
+    flags = {option_name(a) for a in args if a.startswith("-")}
+    positional = [a for a in args if not a.startswith("-")]
+    if not flags <= allowed_flags:
+        return f"git {sub} with a mutating or unknown option"
+    if not positional:
+        return None if bare_ok else f"git {sub} without a read-only verb"
+    if positional[0] not in verbs:
+        return f"git {sub} {positional[0]} is not read-only"
+    return None
+
+
+def git_config_reason(args):
+    flags = {option_name(a) for a in args if a.startswith("-")}
+    positional = [a for a in args if not a.startswith("-")]
+    if not flags <= (GIT_CONFIG_READ | GIT_CONFIG_OTHER_FLAGS):
+        return "git config with a write or unknown option"
+    read_verb = bool(positional) and positional[0] in GIT_CONFIG_READ_VERBS
+    if flags & GIT_CONFIG_READ or read_verb:
+        return None
+    return "git config write"
+
+
 def git_reason(argv):
     sub, args = git_subcommand(argv)
-    if sub is None:
+    if sub is None or sub in GIT_ALLOW:
         return None
     if sub in GIT_DENY:
         return f"git {sub} mutates the repository"
-    if sub in GIT_READ_ONLY_FLAGS:
-        flags = {a for a in args if a.startswith("-")}
-        if not args or (flags and flags <= GIT_READ_ONLY_FLAGS[sub]):
-            return None
-        return f"git {sub} with non-listing arguments"
-    if sub in GIT_READ_ONLY_FIRST_ARG:
-        if args and args[0] in GIT_READ_ONLY_FIRST_ARG[sub]:
-            return None
-        return f"git {sub} outside its read-only forms"
-    if sub == "remote":
-        if not args or args[0] in GIT_REMOTE_READ_ARGS:
-            return None
-        return "git remote mutation"
+    if sub in GIT_LISTING_FLAGS:
+        return git_listing_reason(sub, args)
+    if sub in GIT_READ_VERBS:
+        return git_verb_reason(sub, args)
     if sub == "config":
-        rest = [a for a in args if a not in GIT_CONFIG_SCOPE_FLAGS]
-        if rest and rest[0] in GIT_CONFIG_READ_FLAGS:
-            return None
-        return "git config write"
-    return None
+        return git_config_reason(args)
+    return f"git {sub} is not in the read-only list"
 
 
 def segment_reason(argv):
@@ -176,20 +273,23 @@ def segment_reason(argv):
 
 
 def bash_reason(cmd: str):
-    if is_single_room_cli(cmd):
-        return None
+    try:
+        tokens = tokenize(cmd)
+        if is_single_room_cli(tokens):
+            return None
+        commands, targets = split_commands(tokens)
+    except ShellParseError as exc:
+        return f"cannot parse command safely ({exc})"
     for pat in PYTHON_WRITE_PATTERNS:
         if re.search(pat, cmd):
             return f"matches write pattern: {pat}"
-    for argv in segments(cmd):
+    for argv in commands:
         reason = segment_reason(argv)
         if reason:
             return reason
-    rest = strip_safe_redirects(cmd)
-    if re.search(r"(^|[^<])>", rest):
-        return "redirects output to a file"
-    if "<<" in rest and ">" in rest:
-        return "heredoc written to a file"
+    for target in targets:
+        if not SAFE_REDIRECT_TARGET.match(target):
+            return f"redirects output to a file ({target})"
     return None
 
 
@@ -251,7 +351,10 @@ def decide(payload) -> int:
         return 0
     if tool in WRITE_TOOLS:
         return deny("file write tool in the main checkout")
-    reason = bash_reason(tool_input.get("command", "") or "")
+    command = tool_input.get("command")
+    if not isinstance(command, str):
+        return deny("Bash tool call without a command string")
+    reason = bash_reason(command)
     if reason is None:
         return 0
     return deny(f"main checkout, {reason}")

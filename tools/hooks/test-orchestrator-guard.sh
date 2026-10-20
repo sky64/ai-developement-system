@@ -111,6 +111,75 @@ raw 2 "non-object payload"    '["Write"]'
 raw 2 "missing tool_name"     "{\"cwd\":\"$M\",\"tool_input\":{\"file_path\":\"x.md\"}}"
 raw 2 "tool_input not object" "{\"tool_name\":\"Write\",\"cwd\":\"$M\",\"tool_input\":\"x\"}"
 
+# Cycle 2, P2: quote-aware and operator-aware parsing.
+run 2 "$M" Bash   '{"command":"room-cli --version&git add README.md"}'
+run 2 "$M" Bash   '{"command":"git -c \"user.name=A;B\" commit -m x"}'
+run 2 "$M" Bash   '{"command":"\"git\" commit -m x"}'
+run 2 "$M" Bash   '{"command":"'"'"'git'"'"' add README.md"}'
+run 2 "$M" Bash   '{"command":"git -c '"'"'core.pager=cat'"'"' add README.md"}'
+run 2 "$M" Bash   '{"command":"(git add README.md)"}'
+run 2 "$M" Bash   '{"command":"echo `git add README.md`"}'
+run 2 "$M" Bash   '{"command":"echo \"$(git add README.md)\""}'
+run 2 "$M" Bash   '{"command":"echo x`git add README.md`"}'
+run 2 "$M" Bash   '{"command":"echo x$(git add README.md)"}'
+run 2 "$M" Bash   '{"command":"echo \"unterminated"}'
+run 2 "$M" Bash   '{"command":"echo hi >"}'
+run 2 "$M" Bash   '{"command":"echo hi > README.md"}'
+run 2 "$M" Bash   '{"command":"echo hi >> README.md"}'
+run 2 "$M" Bash   '{"command":"echo hi &> README.md"}'
+run 2 "$M" Bash   '{"command":"echo hi 2> README.md"}'
+run 2 "$M" Bash   '{"command":"cat <<EOF > README.md\nhi\nEOF"}'
+run 0 "$M" Bash   '{"command":"grep -n \"x>y\" README.md"}'
+run 0 "$M" Bash   '{"command":"grep -n '"'"'a;b|c&&d'"'"' README.md"}'
+run 0 "$M" Bash   '{"command":"echo \"a > b\" | cat"}'
+run 0 "$M" Bash   '{"command":"ls 2>&1 >/dev/null"}'
+run 0 "$M" Bash   '{"command":"ls >/tmp/out.txt 2>&1"}'
+run 0 "$M" Bash   '{"command":"ls > $TMPDIR/out.txt; cat ${TMPDIR}/out.txt"}'
+run 2 "$M" Bash   '{"command":"echo \"$(git rev-parse HEAD)\" | cat"}'
+run 0 "$M" Bash   '{"command":"room-cli thread spawn --prompt '"'"'run tests; then git add x'"'"'"}'
+
+# Cycle 2, P2: git remote/tag/branch/stash/worktree/config/submodule check every argument.
+run 2 "$M" Bash   '{"command":"git remote -v add up https://example.invalid/r.git"}'
+run 2 "$M" Bash   '{"command":"git remote set-url origin x"}'
+run 2 "$M" Bash   '{"command":"git remote show --delete origin"}'
+run 2 "$M" Bash   '{"command":"git tag --list -a v2 -m x"}'
+run 2 "$M" Bash   '{"command":"git branch -a -D wt"}'
+run 2 "$M" Bash   '{"command":"git branch --show-current -m renamed"}'
+run 2 "$M" Bash   '{"command":"git stash"}'
+run 2 "$M" Bash   '{"command":"git stash show --include-untracked"}'
+run 2 "$M" Bash   '{"command":"git worktree --porcelain add ../x"}'
+run 2 "$M" Bash   '{"command":"git submodule status --init"}'
+run 2 "$M" Bash   '{"command":"git config --get --unset user.name"}'
+run 2 "$M" Bash   '{"command":"git config --file .gitconfig user.name x"}'
+run 0 "$M" Bash   '{"command":"git remote --verbose"}'
+run 0 "$M" Bash   '{"command":"git remote show origin"}'
+run 0 "$M" Bash   '{"command":"git remote get-url --push origin"}'
+run 0 "$M" Bash   '{"command":"git stash show -p stash@{0}"}'
+run 0 "$M" Bash   '{"command":"git branch -vv"}'
+
+# Cycle 2, P2: read-only false positives.
+run 0 "$M" Bash   '{"command":"git config get user.name"}'
+run 0 "$M" Bash   '{"command":"git config --file .gitconfig --get user.name"}'
+run 0 "$M" Bash   '{"command":"git config --global --get user.name"}'
+run 0 "$M" Bash   '{"command":"git config --system --get core.pager"}'
+run 0 "$M" Bash   '{"command":"git config --show-origin --get user.name"}'
+run 0 "$M" Bash   '{"command":"git config --show-origin"}'
+run 0 "$M" Bash   '{"command":"git config --get-regexp ^user"}'
+for sub in "merge-base HEAD main" "rev-list --count HEAD" "rev-parse HEAD" "ls-files" "ls-tree HEAD" \
+           "ls-remote origin" "blame README.md" "describe --tags" "name-rev HEAD" "cat-file -p HEAD" \
+           "for-each-ref refs/heads" "shortlog -sn" "reflog" "check-ignore x" "status --short" \
+           "log --oneline -3" "show HEAD" "diff --stat" "grep -n x" "count-objects -v" \
+           "var GIT_EDITOR" "help log" "version"; do
+  run 0 "$M" Bash "{\"command\":\"git $sub\"}"
+done
+run 2 "$M" Bash   '{"command":"git gc"}'
+run 2 "$M" Bash   '{"command":"git format-patch -1"}'
+
+# Cycle 2, P3: Bash call with a missing or null command denies with a diagnostic.
+raw 2 "Bash without command"  "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{}}"
+raw 2 "Bash with null command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":null}}"
+raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":[\"ls\"]}}"
+
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{}}' "$M" | ORCHESTRATOR_GUARD=off python3 -I "$HOOK" 2>/dev/null \
   && echo "ok   override ORCHESTRATOR_GUARD=off allows" || { echo "FAIL override"; fail=1; }
 exit $fail
