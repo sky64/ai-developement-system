@@ -18,7 +18,7 @@ This repository is the setup workspace for the installed Cloudroom app. Another 
 | Claude → Codex handoff | Exercised once on 2026-10-19: local commit, Codex child in a Worktree, findings returned to the lead. See the [smoke test](04-smoke-test.md). No deadline was recorded; the lead ran in the checkout, not a Worktree. |
 | Permission/stop/mobile tests | Not yet exercised |
 | Restricted agent GitHub identity and merge gate | Not configured by this setup |
-| Orchestrator write guard | Hook and unit test added 2026-10-20; live enforcement test recorded in docs/06-enforcement-test.md when run |
+| Orchestrator write guard | Hook and unit test added 2026-10-20; live test passed on 2026-10-20. See the [enforcement test](06-enforcement-test.md). |
 
 Provider availability and login checks do not prove a model request, role handoff, sandbox, or approval gate works.
 
