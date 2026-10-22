@@ -1,0 +1,13 @@
+starting step 1
+finished step 1
+starting step 2
+finished step 2
+starting step 3
+resume: step 3 started but not finished, step-3.md absent, redoing step 3
+finished step 3
+starting step 4
+finished step 4
+starting step 5
+finished step 5
+starting step 6
+finished step 6
