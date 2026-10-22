@@ -10,4 +10,4 @@ The [original audit](docs/00-audit-and-architecture-proposal.md) is historical. 
 
 This repository is public configuration and contains no secrets; credentials stay in the owner's secret manager and are referenced by name only. Audit output must never be committed.
 
-Status: Claude and Codex are installed and signed in; project instructions are added. Agent handoff, runtime boundaries, restricted GitHub credentials, repository gates, and mobile behavior remain unverified.
+Status: Claude and Codex are installed and signed in. Instruction discovery and the Claude to Codex review handoff are verified in [docs/04](docs/04-smoke-test.md) to [docs/06](docs/06-enforcement-test.md). Runtime boundaries, restricted GitHub credentials, repository gates, and mobile behavior remain unverified.

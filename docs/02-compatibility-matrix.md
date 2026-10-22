@@ -30,7 +30,7 @@ Fill a separate result record for each provider × execution mode actually selec
 | Capability | Claude Code | Codex | Passing evidence |
 |---|---|---|---|
 | Authentication and harmless task | Untested in pilot runtime | Untested in pilot runtime | Exact version, model, mode, task output; no token values |
-| Shared instructions | CLAUDE.md imports AGENTS.md; .bb/AGENTS.md entry point added | Root AGENTS.md and .bb/AGENTS.md entry point added | Files present; actual next-session discovery Untested |
+| Shared instructions | CLAUDE.md imports AGENTS.md; .bb/AGENTS.md entry point added | Root AGENTS.md and .bb/AGENTS.md entry point added | Verified: discovery in new threads and the Claude to Codex handoff are recorded in [04-smoke-test.md](04-smoke-test.md) to [06-enforcement-test.md](06-enforcement-test.md) |
 | Filesystem boundary | Untested | Untested | Dummy fixtures inside/outside allowed paths; mounts and credentials inspected |
 | Approval and denial | Untested | Untested | Harmless interaction allowed/denied with actual permission mode |
 | Independent review | Implementer | Proposed reviewer | Separate context, specified base/head SHAs, reproducible findings |
@@ -74,7 +74,7 @@ No phone-action path has been tested during this revision. Required-reviewer dep
 | OpenCode | Alternative implementation/provider experiments | Confirm current adapter, auth, instructions, permissions, and cost |
 | Hermes | Persistent assistance or chat operations | Establish a need beyond Cloudroom's scheduling tools; verify service isolation and gateway permissions |
 | Pi | Task-specific extension | Demonstrate a task the initial harnesses cannot handle simply |
-| Jev / other decision models | Structured decision support | Access and value observed once on a documentation diff, see [07-jev-pilot.md](07-jev-pilot.md); privacy policy, source-code value, and headless MCP connection still to verify |
+| Jev / other decision models | Structured decision support | Access observed once on a documentation diff, where high-confidence verdicts matched the Codex review and the one subtle claim came back low confidence for human review, see [07-jev-pilot.md](07-jev-pilot.md); value on real decisions not established; privacy policy, source-code value, and headless MCP connection still to verify |
 | Parallel implementers | Independent task throughput | Verify workspaces, shared resources, resource limits, and merge coordination |
 
 These rows record possible roles, not verified vendor compatibility. The pilot does not require their installation or credentials.

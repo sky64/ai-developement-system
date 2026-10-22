@@ -9,9 +9,9 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 | Orchestrator | Claude thread in the project checkout | No. Reads, runs checks, selects specialists, spawns children, routes review, reports. |
 | Specialist implementer | Claude child thread in its own Cloudroom worktree, acting as one named agent | Yes, its assigned files only. One writer per file set. |
 | Independent reviewer | Codex child thread in its own worktree | No. Reviews the diff between base and head. |
-| Read-only helpers | ECC plugin agents started in-process by the orchestrator or an implementer (planner, Explore, language reviewers, silent-failure-hunter) | No. In the checkout the guard blocks them; in a worktree the implementer remains responsible. |
+| Read-only investigation | The orchestrator itself. Native subagents are unavailable inside Cloudroom threads (verified 2026-10-21 in thread thr_nveh5eysxj: the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead`). ECC agent definitions are used as role prompts for Cloudroom child threads. | No. The orchestrator reads and runs checks; anything that writes runs as a child thread. |
 
-ECC agents are used for reading, planning, and pre-review. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it.
+ECC agent definitions are role prompts, not in-process helpers, inside Cloudroom. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it.
 
 ## Enforcement
 
@@ -83,3 +83,7 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 ## Known conflicts
 
 The machine-wide ECC rules in `~/.claude/rules/ecc/common/` tell agents to start native subagents immediately and to use parallel Task execution. In this project those rules are overridden by this policy for anything that writes. The guard enforces the override in the checkout; in a worktree it is the implementer's prompt that holds.
+
+The ECC plugin Bash hook `block-no-verify` scans quoted prompt text and once blocked a `room-cli thread spawn`. It can be disabled per project by setting `ECC_DISABLED_HOOKS` to `pre:bash:block-no-verify` in the `env` key of `.claude/settings.json`. The recommendation is to keep it enabled and reword prompts, because it protects implementer worktrees from hook bypass.
+
+ECC rule files support `paths` frontmatter for inclusion only, so the machine-wide common rules cannot be excluded for one project. This policy relies on project precedence plus the guard.

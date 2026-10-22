@@ -5,7 +5,7 @@
 # - CLI/config status output may include sensitive account details; review locally before sharing.
 # - Run on each machine involved (Omarchy workstation, Mac with the Cloudroom app, Cloudroom Core host):
 #       bash tools/audit/cloudroom-audit.sh > audit/$(hostname)-$(date +%F).txt
-# - Review the output before sharing. Then commit it under audit/ or paste it into the session.
+# - Review the output before sharing. It must never be committed; paste the reviewed parts into the session instead.
 #
 # Exit code is always 0; missing tools are reported, not fatal.
 

@@ -11,7 +11,7 @@ Read README.md and docs/03-cloudroom-setup.md for the current setup state. The a
 - Claude Code is the orchestrator and does not write code or commit. Codex is the independent reviewer. Explicit user assignments take precedence.
 - Every change is implemented by a specialist agent chosen by the procedure in docs/05-delegation.md. Generalists only for simple tasks. If no specialist exists, author one first.
 - Implementers and reviewers run as Cloudroom child threads through room-cli, each in its own worktree. Keep a task to one implementer and one reviewer. Assign each worker its files, acceptance criteria, base commit, and limits.
-- ECC plugin agents may be started in-process for read-only work: planning, exploration, pre-review. Never for writing. Never launch agent CLIs from shell scripts to delegate.
+- Native subagents are unavailable inside Cloudroom threads; the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead` (verified 2026-10-21, thread thr_nveh5eysxj). ECC agent definitions are used as role prompts for Cloudroom child threads, and the orchestrator does read-only investigation itself. Never launch agent CLIs from shell scripts to delegate.
 - A Claude Code hook in .claude/settings.json blocks writes in the main checkout and, in a worktree, writes outside that worktree. It is a tripwire, not a security boundary. Worktrees are workspace separation, not an enforced write boundary; one would need OS-user separation or a Cloud sandbox.
 - Inspect or message only the current task's threads when authorized, not unrelated threads.
 
