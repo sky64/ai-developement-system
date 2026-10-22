@@ -90,8 +90,12 @@ The following is an operator procedure, not an activation performed by this
 change. Installed source supports --disabled even though help omits it.
 Run from the reviewed repository on the local coordinator. The example keeps
 the create response in a private temporary file, passes the URL through stdin
-to gh secret set, and prints only nonsecret staging metadata. The URL is a
-bearer secret: never paste the full response into chat or commit it.
+to gh secret set, then runs the attended closed-PR receiver smoke test in the
+same shell lifecycle. The recorded loop is paused in a finally block before
+the EXIT trap deletes either private URL copy. Do not split these steps into
+separate shell invocations. Run this whole block only when ready to attend the
+temporary resume and smoke test. The URL is a bearer secret: never paste the
+full response into chat or commit it.
 
 ```bash
 set +x
@@ -127,8 +131,45 @@ import json
 import sys
 with open(sys.argv[1]) as stream:
     result = json.load(stream)
-print("Staged cloud loop:", result["id"], "enabled:", result["enabled"],
+import subprocess
+import urllib.request
+import uuid
+
+loop_id = str(uuid.UUID(result["id"]))
+print("Staged cloud loop:", loop_id, "enabled:", result["enabled"],
       "new_thread:", result["new_thread"])
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+head = "bea714956be29d9f5af46471a3dc9c7c9a616f36"
+base = "d343672f868ce13f5dd42cbea012532df0275626"
+repo = "sky64/ai-developement-system"
+payload = {"schema": 1, "repository": repo, "number": 3,
+           "head": head, "base": base,
+           "request_key": f"{repo}#3:{head}:{base}"}
+failed = False
+try:
+    subprocess.run(["room-cli", "automation", "resume", loop_id],
+                   check=True, capture_output=True)
+    request = urllib.request.Request(
+        result["url"], data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.build_opener(NoRedirect).open(request, timeout=10) as response:
+        print("Receiver smoke POST HTTP:", response.status, "loop:", loop_id)
+except Exception:
+    failed = True
+    print("Receiver smoke delivery uncertain/failed; inspect only redacted state. No retry.")
+finally:
+    # Always attempt pause, including an ambiguous resume or POST failure.
+    paused = subprocess.run(["room-cli", "automation", "pause", loop_id],
+                            capture_output=True)
+    print("Loop pause confirmed:" if paused.returncode == 0 else
+          "Loop pause FAILED; operator must pause recorded ID:", loop_id)
+    failed = failed or paused.returncode != 0
+if failed:
+    raise SystemExit(1)
 PY
 ```
 
@@ -144,10 +185,13 @@ The owner must approve/merge before the trusted workflow is live on main.
 A bot-created PR opened before that merge will not automatically retrigger;
 use a later authorized supported event, such as reopening an eligible PR.
 
-For the attended trial, resume only the recorded loop ID with
-room-cli automation resume LOOP_ID. Do not register a direct repository webhook.
-Send one trusted minimal request for merged PR 3 first: expect an explicit
-closed/merged skip in a fresh thread, no review or GitHub write. This tests
+The same-shell procedure above temporarily resumes only the recorded loop,
+POSTs one trusted minimal request for merged PR 3, then pauses it before private
+file cleanup. Do not resend after an uncertain delivery or rotate the URL to
+recover it. Expect an explicit closed/merged skip in a fresh thread, no review
+or GitHub write. Inspect the resulting thread even though the loop is paused;
+pause does not cancel a started run. Do not register a direct repository webhook.
+This tests
 the receiver/prompt, not the Actions trigger. Next exercise a new eligible bot
 PR after workflow merge. Record Actions run, batch thread ID, request_key,
 validated head/base, verdict, and proof of no comments/approval/merge. Those

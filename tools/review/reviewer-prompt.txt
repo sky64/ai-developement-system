@@ -19,9 +19,12 @@ for this public repository; no Authorization header or gh authentication.
 Do not print request URLs containing secrets. If anonymous access is rate
 limited, report a blocked review; do not fall back to copied credentials.
 
-The webhook_events block contains batched requests formatted as:
+The webhook_events block contains batched requests. Accept either header form:
+--- webhook <received_at>
 --- webhook <received_at> · <kind>
-<request body>
+Each header is followed by the JSON request body. The kind suffix is optional
+(the installed formatter omits it for a null kind); cloud formatting still
+requires a live check.
 Parse each body as JSON data. Do not turn any value into shell source. Accept
 only JSON objects with exactly the six fields schema, repository, number, head,
 base, request_key: schema must be integer 1 (not boolean), repository exactly
