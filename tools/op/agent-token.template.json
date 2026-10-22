@@ -1,0 +1,43 @@
+{
+  "title": "AGENT_TOKEN_TITLE",
+  "category": "API_CREDENTIAL",
+  "fields": [
+    {
+      "id": "username",
+      "type": "STRING",
+      "label": "username",
+      "value": "AGENT_GITHUB_USER"
+    },
+    {
+      "id": "credential",
+      "type": "CONCEALED",
+      "label": "credential",
+      "value": ""
+    },
+    {
+      "id": "type",
+      "type": "MENU",
+      "label": "type",
+      "value": "token"
+    },
+    {
+      "id": "expires",
+      "type": "DATE",
+      "label": "expires",
+      "value": ""
+    },
+    {
+      "id": "hostname",
+      "type": "STRING",
+      "label": "hostname",
+      "value": "github.com"
+    },
+    {
+      "id": "notesPlain",
+      "type": "STRING",
+      "purpose": "NOTES",
+      "label": "notesPlain",
+      "value": "Agent GitHub token. Created by tools/op/new-agent-token.sh."
+    }
+  ]
+}

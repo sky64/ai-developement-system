@@ -8,6 +8,7 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 |---|---|---|
 | Orchestrator | Claude thread in the project checkout | No. Reads, runs checks, selects specialists, spawns children, routes review, reports. |
 | Specialist implementer | Claude child thread in its own Cloudroom worktree, acting as one named agent | Yes, its assigned files only. One writer per file set. |
+| Specialist implementer, cloud | Claude child thread in a Cloudroom cloud sandbox, acting as one named agent | Yes, its assigned files only. The guard is off through the cloud environment (`ORCHESTRATOR_GUARD=off`); the sandbox is the boundary. See [09-agent-identity.md](09-agent-identity.md). |
 | Independent reviewer | Codex child thread in its own worktree | No. Reviews the diff between base and head. |
 | Read-only investigation | The orchestrator itself. Native subagents are unavailable inside Cloudroom threads (verified 2026-10-21 in thread thr_nveh5eysxj: the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead`). ECC agent definitions are used as role prompts for Cloudroom child threads. | No. The orchestrator reads and runs checks; anything that writes runs as a child thread. |
 
@@ -22,6 +23,7 @@ What this is and is not:
 - Worktrees are workspace separation, not a write boundary. A session in a worktree can write any path the OS user can, including the main checkout; the hook's path check narrows that for the file write tools only. No enforced write boundary exists yet. One would need OS-user separation or a Cloud sandbox per implementer.
 - The Bash check is a tokenizer plus allow and deny lists, not a shell. A determined agent can route around it, for example through a script file or an interpreter. It remains a tripwire that turns silent drift into a visible denial.
 - `ORCHESTRATOR_GUARD=off` disables it for a human session. That is a convention.
+- In Cloudroom cloud sandboxes the cloud environment sets `ORCHESTRATOR_GUARD=off` for every thread, so the guard does not run there; the sandbox, not the hook, separates the implementer from the owner's checkout.
 - Codex threads do not run Claude Code hooks. The reviewer's read-only status rests on its prompt and on review of its worktree diff.
 
 ## Specialist selection, required for every task

@@ -38,6 +38,9 @@ Required by [05-delegation.md](05-delegation.md) before any child starts.
 ## Limitations found
 
 - The project guard and the machine-wide ECC pre-bash hook both pattern-match words inside quoted prompt text. The orchestrator was denied two `room-cli thread spawn` commands because their prompts contained write-like words.
+- The guard denies the read form `git config user.name` without `--get`, because only explicit read flags and verbs count as reads for `config`.
+- The guard denies any command containing command substitution, `$(` or a backtick, even when the command is read-only.
+- Both were observed in cloud thread thr_wnjaz3ftp5 on 2026-10-22, where the guard was still active, and reproduced against `tools/hooks/orchestrator-guard.py` the same day; `git config --get user.name` is allowed.
 - The project guard exempts a single plain `room-cli` command with no shell operators. Since review cycle 2 the check is quote aware, so a quoted prompt argument containing `;`, `&`, `|` or a newline keeps the exemption; a prompt containing `$(` or a backtick, even quoted, is a parse failure and denies. The ECC hook has no exemption, so the denial can still come from the machine-wide hook.
 
 ## What the test proves

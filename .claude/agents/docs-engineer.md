@@ -30,8 +30,9 @@ only writer for that task.
 4. Verify: `git diff --check`; every relative Markdown link resolves;
    `bash -n` for shell scripts; the matching unit test for hook scripts
    (`bash tools/hooks/test-orchestrator-guard.sh`).
-5. Commit on your worktree branch with a conventional message. Do not push,
-   merge, or touch other branches.
+5. Commit on your worktree branch with a conventional message. Do not touch
+   other branches. Do not push or merge unless the task brief assigns a push
+   through the agent identity, and never merge.
 
 ## HALT and report instead of guessing
 
