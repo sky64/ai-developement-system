@@ -59,7 +59,7 @@ PR 2 was authored by `Solvela-bot`, reviewed by Codex thread thr_h93fu5fccb at c
 | Git setup | A cloud setup script sets the Git author to `Solvela-bot` and a `github.com` credential helper that reads `GH_AGENT_TOKEN` at push time |
 | Tooling | [tools/op/new-agent-token.sh](../tools/op/new-agent-token.sh) creates such an item from [tools/op/agent-token.template.json](../tools/op/agent-token.template.json) and can copy it into the cloud environment |
 
-The first cloud attempt, thread thr_wnjaz3ftp5, halted for two reasons: the setup script did not find the checkout at `/code`, and the guard override was not yet an environment variable. Both were fixed before this run.
+The first cloud attempt, thread thr_wnjaz3ftp5, halted for two reasons: the setup script did not find the checkout at `/code`, and the guard override was not yet an environment variable. The orchestrator thread reported both as fixed before this run. That is confirmed only by this run's step 0 observations, from thread thr_24nwt58nae's report: the `github.com` credential helper was present, `ORCHESTRATOR_GUARD` was off, and writes in the checkout were allowed. The setup script itself was not inspected.
 
 The device-code OAuth grant used for PR 2 is to be revoked by the owner. Its status is unconfirmed.
 
@@ -72,5 +72,16 @@ The device-code OAuth grant used for PR 2 is to be revoked by the owner. Its sta
 | Token storage in 1Password | Stated by the owner; not inspected from a sandbox. In this run's sandbox, `GH_AGENT_TOKEN` was set and the GitHub API reported actor `Solvela-bot` with scope `repo` |
 | `op item create` and `room-cli cloud env set` usage in the script | Checked with stub commands only; not run against 1Password or Cloudroom |
 | Token rotation, self-approval refusal, and branch protection bypass | Still untested, as listed above |
+| Merge without approval is rejected | Untested; PR 2 exercised only the approved merge |
+
+### Review cycle 1
+
+Codex review thread thr_zysv79xr8t on be70987 raised five findings; all fixed in one commit.
+
+- P1, `tools/op/new-agent-token.sh`: shell tracing would print the token. Fix: `set +x` at the top and again before `read -rs`; no tracing anywhere.
+- P2, `tools/op/new-agent-token.sh`: a failed `op read` still ran `room-cli cloud env set` with empty input. Fix: the read is captured with a failure and empty check, and room-cli runs only after both pass.
+- P2, `tools/op/new-agent-token.sh`: arguments were not fully validated before the token prompt. Fix: non-empty title, username and hostname, a real `YYYY-MM-DD` date checked with `python3 -I`, and `op`, `python3` and, with a fifth argument, `room-cli` on PATH, all before the prompt.
+- P2, this file: the two setup fixes were stated as done. Fix: qualified as reported by the orchestrator thread and confirmed only by step 0 observations.
+- P2, README.md, [02-compatibility-matrix.md](02-compatibility-matrix.md), [03-cloudroom-setup.md](03-cloudroom-setup.md): an approved merge was called verification of the merge gate. Fix: changed to exercised, with rejection of a merge without approval marked untested.
 
 Related: [capability matrix](02-compatibility-matrix.md), [setup record](03-cloudroom-setup.md).
