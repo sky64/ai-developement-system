@@ -16,7 +16,7 @@ Labels: **Observed** = current CLI/API inspection; **Documented** = linked vendo
 | GitHub actor | `gh api user` → `sky64` | Observed; owner identity currently available to this agent |
 | Existing PR actor | PR #1 author is `sky64` | Observed; cannot demonstrate separate human review |
 | Repository visibility | GitHub API → private on 2026-10-19; made public on 2026-10-22 | Observed |
-| Current main protection | Absent on 2026-10-19; since 2026-10-22 main requires one approving review, with admin enforcement and no force pushes | Observed; PR #1 cannot merge until a second identity approves or admin enforcement is lifted for the merge |
+| Current main protection | Absent on 2026-10-19; since 2026-10-22 main requires one approving review, with admin enforcement and no force pushes | Observed; PR #1 merged as ace1e62. The first PR authored by the agent identity is recorded in [09-agent-identity.md](09-agent-identity.md) |
 | Pilot repository/plan | This setup repository is the first workspace; plan not verified | Another application repo is optional; gate eligibility remains a prerequisite |
 
 Do not commit raw authentication output or tokens. Capture only the identity, scopes/permissions, versions, configuration metadata, and redacted results necessary to assess a boundary.
@@ -55,9 +55,9 @@ As of 2026-10-22 one phone-action path has been tested: the owner denied and app
 
 | Requirement | Mechanism | Current status / limitation |
 |---|---|---|
-| Human approval before merge | Restricted agent identity + required owner review + no agent rule editing/bypass | Partial since 2026-10-22: main requires one approving review with admin enforcement; current actor is still the owner, so a second identity is needed to merge |
+| Human approval before merge | Restricted agent identity + required owner review + no agent rule editing/bypass | Configured 2026-10-22: main requires one approving review with admin enforcement, and the agent identity `Solvela-bot` has write, not admin. First exercised by the PR recorded in [09-agent-identity.md](09-agent-identity.md); bypass and self-approval refusal untested |
 | Private-repo branch protection | Eligible GitHub plan | Documented; actual eligibility Untested |
-| No self-approval of PR | Distinct human and agent actors | Documented GitHub restriction; PR #1 is a bootstrap artifact |
+| No self-approval of PR | Distinct human and agent actors | Documented GitHub restriction; actors are distinct since 2026-10-22, see [09-agent-identity.md](09-agent-identity.md); refusal not tested |
 | Deployment approval | Eligible Environment reviewers, separately verified platform gate, or owner-only manual deployment | Deferred; Environment reviewers are public-only on Free/Pro/Team |
 | Production isolation | Credentials and execution inaccessible to dev agents | Proposed; check helpers, connectors, mounts, env, and network |
 | Local file protection | Runtime/OS boundary with actual permission mode | Untested; the hook caught the out-of-worktree write before the permission layer did; branches/worktrees are Git separation only |

@@ -2,7 +2,7 @@
 
 This repository is the setup workspace for the installed Cloudroom app. Another application repository is not required to configure the workflow.
 
-## Current state — 2026-10-19
+## Current state as of 2026-10-22
 
 | Item | Result |
 |---|---|
@@ -17,7 +17,7 @@ This repository is the setup workspace for the installed Cloudroom app. Another 
 | Shared project instructions | Consumed by Claude (CLAUDE.md, AGENTS.md, .bb/AGENTS.md) and by Codex (.bb/AGENTS.md, AGENTS.md) in the [smoke test](04-smoke-test.md) |
 | Claude → Codex handoff | Exercised once on 2026-10-19: local commit, Codex child in a Worktree, findings returned to the lead. See the [smoke test](04-smoke-test.md). No deadline was recorded; the lead ran in the checkout, not a Worktree. |
 | Permission/stop/mobile tests | Permission mode accept-edits and stop/resume exercised on 2026-10-22, see the [matrix tests](08-matrix-tests.md). No hard-limit flag found in the installed CLI. Phone approval tested the same day: denial from the Cloudroom phone app verified end to end; approval verified only as far as the permission gate, because the approved route failed at the egress proxy with a repeatable 502, and the orchestrator also granted the record from the CLI, so the phone action's contribution cannot be isolated. Observed: interaction records stayed pending after app decisions and the next command was rejected; reported to Cloudroom through feedback as a suspected defect, cause unconfirmed. |
-| Restricted agent GitHub identity and merge gate | Restricted identity not configured. On 2026-10-22 PR 1 was made ready, the repository was made public, and branch protection on main requires one approving review with admin enforcement and no force pushes. PR 1 cannot merge until a second identity approves or admin enforcement is lifted for the merge. |
+| Restricted agent GitHub identity and merge gate | Configured 2026-10-22: the agent identity `Solvela-bot` is a collaborator with write permission, main requires one approving review with admin enforcement and no force pushes, and the first PR through that path is recorded in the [agent identity record](09-agent-identity.md). Token rotation, self-approval refusal, and bypass are untested. |
 | Orchestrator write guard | Hook and unit test added 2026-10-20; live test passed on 2026-10-20. See the [enforcement test](06-enforcement-test.md). |
 
 Provider availability and login checks do not prove a model request, role handoff, sandbox, or approval gate works.
