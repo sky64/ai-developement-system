@@ -2,9 +2,11 @@
 
 Status on 2026-10-22: owner-approved PR 4 merged at
 2410e34b879246fa95a56c7b80a167b9646e494b (18:27:45 UTC). The cloud receiver
-passed one closed-PR smoke test and the loop is paused. The GitHub Actions
-trigger and an eligible open-PR review remain unverified. Owner approval and
-merge stay manual. Findings appear only in Cloudroom; no automated GitHub
+passed a closed-PR smoke test and one automatic opened-event review of an
+eligible PR 5 revision. A synchronize-event review of the next revision is
+pending. The loop is temporarily enabled only while the coordinator attends
+that test; no long-term unattended operation is established. Owner approval
+and merge stay manual. Findings appear only in Cloudroom; no automated GitHub
 review/comment/approval is posted.
 
 ## Smallest supported path
@@ -197,9 +199,9 @@ This tests
 the receiver/prompt, not the Actions trigger. Next exercise a new eligible bot
 PR after workflow merge. Record Actions run, batch thread ID, request_key,
 validated head/base, verdict, and proof of no comments/approval/merge.
-The Actions trigger, eligible open-PR review,
-cloud batching/serialization and actual deadline termination remain untested;
-the completed receiver-only smoke test is recorded below.
+The receiver-only and opened-event results are recorded below. The next
+revision's synchronize-event review, cloud batching/serialization and actual
+deadline termination remain unverified.
 
 ## Pause, retry, rollback
 
@@ -229,13 +231,38 @@ No approval, merge, shared auth changes, or production changes are automated.
   bea714956be29d9f5af46471a3dc9c7c9a616f36 and base
   d343672f868ce13f5dd42cbea012532df0275626. No diff review or approval occurred.
 - Read-only recheck confirmed enabled:false, new_thread:true and one run after
-  the test. This proves the tested receiver/skip path; the Actions trigger and
-  eligible open-PR review still need the attended end-to-end test.
-- Documentation continuation: project docs-engineer; only this file, base
+  the test. This proves the tested receiver/skip path. The later opened-event
+  test below separately exercised the Actions trigger and eligible PR review.
+- Documentation continuation: project docs-engineer; this file and the automatic
+  review summary rows in [setup](03-cloudroom-setup.md) and
+  [matrix](02-compatibility-matrix.md), base
   2410e34b879246fa95a56c7b80a167b9646e494b. Skills ecc:git-workflow and
   ecc:coding-standards loaded. Full access in own worktree; attended deadline
   2026-10-22T18:43:00Z, no verified external cap, at most two retries per
   operation and two correction/review cycles. No activation by this implementer.
+
+### Verified opened-event review, 2026-10-22
+
+- Bot-authored, non-draft PR 5 opened from head
+  22656cc2657ce36732263545bf73b81ec161ef0a to base
+  2410e34b879246fa95a56c7b80a167b9646e494b. The trusted main workflow ran
+  automatically on pull_request_target:
+  [Actions run 39832229392](https://github.com/sky64/ai-developement-system/actions/runs/39832229392)
+  succeeded at 18:32:03 UTC and logged
+  "Review requested for validated PR/head/base."
+- Loop 89a9e4ab-a695-44b8-bb03-2af7c4976f4e advanced from one to two runs
+  without error. Fresh Codex gpt-6.1-sol/high thread @thread:thr_9i4pj54egs
+  reported the exact PR/base/head and matching request_key, reviewed the
+  complete documentation diff through anonymous GitHub GETs with no omissions,
+  and revalidated freshness at 18:33:35 UTC: no findings from static inspection.
+  No candidate code/tests or GitHub writes were performed; the verdict is advisory.
+- The coordinator independently confirmed PR 5 remained open with review
+  required, reviews empty and comments empty. This test used neither a manual
+  webhook POST nor a manually spawned reviewer.
+- The coordinator paused the loop after dispatch, then temporarily resumed it
+  for the next revision's synchronize-event test. That result remains pending.
+  Runtime caps, durable deduplication and credential/Mac isolation remain
+  unverified; the opened-event result does not establish them.
 
 ### Initial implementation record
 
@@ -266,7 +293,7 @@ draft/closed/merged states, invalid IDs/SHAs, stale head/base, minimal POST,
 redirect rejection, no POST for a merged PR 3 fixture, and no automatic POST
 retry. They do not execute GitHub Actions or a cloud agent. Source security
 scan passed with the expected generic GitHub workflow warning; the workflow
-documents its trusted-code/no-checkout design. GitHub Actions-to-Cloudroom
-delivery, an eligible open-PR review, cost controls and security boundaries
-remain separate checks, not inferred from these offline tests or the
-receiver-only smoke test.
+documents its trusted-code/no-checkout design. The live evidence above
+establishes a closed-PR skip and one opened-event review of the recorded head.
+The next revision's synchronize review, cost controls and security boundaries
+remain separate checks; they are not inferred from these results.
