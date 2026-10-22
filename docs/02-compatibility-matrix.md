@@ -74,7 +74,7 @@ No phone-action path has been tested during this revision. Required-reviewer dep
 | OpenCode | Alternative implementation/provider experiments | Confirm current adapter, auth, instructions, permissions, and cost |
 | Hermes | Persistent assistance or chat operations | Establish a need beyond Cloudroom's scheduling tools; verify service isolation and gateway permissions |
 | Pi | Task-specific extension | Demonstrate a task the initial harnesses cannot handle simply |
-| Jev / other decision models | Structured decision support | Verify identity, access, pricing, privacy, and value on a real decision |
+| Jev / other decision models | Structured decision support | Access and value observed once on a documentation diff, see [07-jev-pilot.md](07-jev-pilot.md); privacy policy, source-code value, and headless MCP connection still to verify |
 | Parallel implementers | Independent task throughput | Verify workspaces, shared resources, resource limits, and merge coordination |
 
 These rows record possible roles, not verified vendor compatibility. The pilot does not require their installation or credentials.

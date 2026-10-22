@@ -11,7 +11,7 @@ Date: 2026-10-20. Run from orchestrator thread thr_nveh5eysxj. Scope: land the d
 | Implementer | thr_kbsuw9hifw, worktree branch `room/implementer-land-delegation-policy-and-g-hifw`, applied the patch as a7f23b1 |
 | Implementer checks | All passing: 17 hook unit cases, whitespace, settings JSON, `bash -n`, 16 links |
 | Leftover | The staged copy remains in the checkout working tree. The owner clears it. |
-| Probe A | thr_gik97cgkd8, Claude in the checkout environment env_7wi6hunwb4 |
+| Probe A | thr_gik97cgkd8, Claude in the checkout environment on the owner's workstation |
 | Probe B | thr_bgvmxiiv2n, Claude in worktree branch `room/enforcement-test-b-worktree-expect-allow-iv2n`, based on a7f23b1 |
 | Deadline | None was recorded for the policy-landing task. This record's task had one (30 minutes). Recorded as a deviation. |
 | This record | Written by implementer thread thr_qfft7dyc5n on branch `room/implementer-docs-06-enforcement-test-rec-yc5n`, base a7f23b1, retry allowance 2, permission mode inherited from the orchestrator |
