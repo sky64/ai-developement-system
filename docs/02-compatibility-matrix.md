@@ -17,7 +17,7 @@ Labels: **Observed** = current CLI/API inspection; **Documented** = linked vendo
 | Existing PR actor | PR #1 author is `sky64` | Observed; cannot demonstrate separate human review |
 | Repository visibility | GitHub API → private on 2026-10-19; made public on 2026-10-22 | Observed |
 | Current main protection | Absent on 2026-10-19; since 2026-10-22 main requires one approving review, with admin enforcement and no force pushes | Observed; PR #1 merged as ace1e62. The first PR authored by the agent identity is recorded in [09-agent-identity.md](09-agent-identity.md) |
-| Automatic PR review | Trusted Actions filter, fixed reviewer prompt, offline synthetic HTTP tests; see [10-automatic-review.md](10-automatic-review.md) | Prepared, not activated; cloud delivery, durable deduplication, runtime caps and credential isolation unverified |
+| Automatic PR review | Closed-PR skip and one attended opened-event Actions → fresh Codex static review verified on PR 5; see [10-automatic-review.md](10-automatic-review.md) | Next revision's synchronize review pending; durable deduplication, runtime caps and credential/Mac isolation unverified; owner approval/merge manual |
 | Pilot repository/plan | This setup repository is the first workspace; plan not verified | Another application repo is optional; gate eligibility remains a prerequisite |
 
 Do not commit raw authentication output or tokens. Capture only the identity, scopes/permissions, versions, configuration metadata, and redacted results necessary to assess a boundary.
