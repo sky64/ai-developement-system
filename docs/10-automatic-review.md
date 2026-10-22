@@ -1,9 +1,11 @@
-# Automatic Codex review: staged attended trial
+# Automatic Codex review: attended trial
 
-Status on 2026-10-22: configuration and offline tests prepared. This change
-does not activate a loop, install a secret, create a repository hook, or prove
-a GitHub-to-Codex run. Owner approval and merge stay manual. Findings appear
-only in Cloudroom; no GitHub review/comment/approval is posted.
+Status on 2026-10-22: owner-approved PR 4 merged at
+2410e34b879246fa95a56c7b80a167b9646e494b (18:27:45 UTC). The cloud receiver
+passed one closed-PR smoke test and the loop is paused. The GitHub Actions
+trigger and an eligible open-PR review remain unverified. Owner approval and
+merge stay manual. Findings appear only in Cloudroom; no automated GitHub
+review/comment/approval is posted.
 
 ## Smallest supported path
 
@@ -194,9 +196,10 @@ pause does not cancel a started run. Do not register a direct repository webhook
 This tests
 the receiver/prompt, not the Actions trigger. Next exercise a new eligible bot
 PR after workflow merge. Record Actions run, batch thread ID, request_key,
-validated head/base, verdict, and proof of no comments/approval/merge. Those
-live checks, cloud batching/serialization and actual deadline termination are
-still untested here.
+validated head/base, verdict, and proof of no comments/approval/merge.
+The Actions trigger, eligible open-PR review,
+cloud batching/serialization and actual deadline termination remain untested;
+the completed receiver-only smoke test is recorded below.
 
 ## Pause, retry, rollback
 
@@ -215,6 +218,26 @@ secret replacement. Roll back repository changes through a reviewed revert.
 No approval, merge, shared auth changes, or production changes are automated.
 
 ## Task evidence and verification
+
+### Verified receiver smoke test, 2026-10-22
+
+- Cloud loop 89a9e4ab-a695-44b8-bb03-2af7c4976f4e was staged for fresh Codex
+  threads. The coordinator installed CLOUDROOM_REVIEW_WEBHOOK without exposing
+  the URL and recorded HTTP 202 for one trusted closed-PR 3 POST.
+- Fresh cloud thread @thread:thr_vecuqwid4t explicitly skipped PR 3 as closed
+  and merged. Two anonymous GitHub GETs confirmed matching head
+  bea714956be29d9f5af46471a3dc9c7c9a616f36 and base
+  d343672f868ce13f5dd42cbea012532df0275626. No diff review or approval occurred.
+- Read-only recheck confirmed enabled:false, new_thread:true and one run after
+  the test. This proves the tested receiver/skip path; the Actions trigger and
+  eligible open-PR review still need the attended end-to-end test.
+- Documentation continuation: project docs-engineer; only this file, base
+  2410e34b879246fa95a56c7b80a167b9646e494b. Skills ecc:git-workflow and
+  ecc:coding-standards loaded. Full access in own worktree; attended deadline
+  2026-10-22T18:43:00Z, no verified external cap, at most two retries per
+  operation and two correction/review cycles. No activation by this implementer.
+
+### Initial implementation record
 
 - Implementer: ECC loop-operator role, explicitly assigned to Codex after the
   original Claude session could not start; no other agents spawned.
@@ -243,6 +266,7 @@ draft/closed/merged states, invalid IDs/SHAs, stale head/base, minimal POST,
 redirect rejection, no POST for a merged PR 3 fixture, and no automatic POST
 retry. They do not execute GitHub Actions or a cloud agent. Source security
 scan passed with the expected generic GitHub workflow warning; the workflow
-documents its trusted-code/no-checkout design. Independent review, live
-GitHub-to-Cloudroom delivery, cost controls and security boundaries remain
-separate checks, not inferred from these tests.
+documents its trusted-code/no-checkout design. GitHub Actions-to-Cloudroom
+delivery, an eligible open-PR review, cost controls and security boundaries
+remain separate checks, not inferred from these offline tests or the
+receiver-only smoke test.
