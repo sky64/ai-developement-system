@@ -6,6 +6,8 @@ Start with the [Cloudroom setup record](docs/03-cloudroom-setup.md). This reposi
 
 The [architecture proposal](docs/01-architecture-proposal.md) and [capability matrix](docs/02-compatibility-matrix.md) define the intended boundaries and remaining checks. Additional harnesses and production deployment are deferred. Jev was tried once as a second opinion, recorded in the [Jev pilot](docs/07-jev-pilot.md); it is not integrated.
 
+The [automatic Codex review trial](docs/10-automatic-review.md) stages a trusted Actions filter and fresh Cloudroom reviewers for eligible bot PRs. Offline tests pass; delivery, cost controls, and runtime boundaries still need an attended live trial. Owner approval and merge remain manual.
+
 The [original audit](docs/00-audit-and-architecture-proposal.md) is historical. The [audit script](tools/audit/cloudroom-audit.sh) is a preliminary inventory tool; review its output before sharing and do not infer duplicate installations from directory counts.
 
 This repository is public configuration and contains no secrets; credentials stay in the owner's secret manager and are referenced by name only. Audit output must never be committed.

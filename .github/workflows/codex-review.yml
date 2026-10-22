@@ -1,0 +1,139 @@
+name: Codex review request
+
+# Trusted default-branch workflow only. Never check out or execute PR content.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  pull-requests: read
+
+# Coalesces overlapping forwarding jobs, not already-started Cloudroom reviews.
+concurrency:
+  group: codex-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  forward:
+    if: >-
+      github.repository == 'sky64/ai-developement-system' &&
+      github.event.pull_request.user.login == 'Solvela-bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.state == 'open' &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate current PR and forward minimal request
+        env:
+          GH_READ_TOKEN: ${{ github.token }}
+          REVIEW_WEBHOOK: ${{ secrets.CLOUDROOM_REVIEW_WEBHOOK }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = "sky64/ai-developement-system"
+          ACTIONS = {"opened", "reopened", "ready_for_review", "synchronize"}
+          SHA = re.compile(r"[0-9a-f]{40}")
+
+          def eligible(pr):
+              return (
+                  isinstance(pr, dict)
+                  and type(pr.get("number")) is int
+                  and pr["number"] > 0
+                  and pr.get("state") == "open"
+                  and pr.get("draft") is False
+                  and pr.get("merged") is False
+                  and pr.get("user", {}).get("login", "").lower() == "solvela-bot"
+                  and pr.get("head", {}).get("repo", {}).get("full_name") == REPO
+                  and pr.get("base", {}).get("repo", {}).get("full_name") == REPO
+                  and pr.get("base", {}).get("ref") == "main"
+                  and all(
+                      isinstance(pr.get(side, {}).get("sha"), str)
+                      and SHA.fullmatch(pr[side]["sha"])
+                      for side in ("head", "base")
+                  )
+              )
+
+          def select(event, current, event_name):
+              if (
+                  event_name != "pull_request_target"
+                  or event.get("action") not in ACTIONS
+                  or event.get("repository", {}).get("full_name") != REPO
+                  or not eligible(event.get("pull_request"))
+                  or not eligible(current)
+              ):
+                  return None
+              original = event["pull_request"]
+              if (
+                  type(event.get("number")) is not int
+                  or event["number"] != original["number"]
+                  or current["number"] != original["number"]
+                  or any(current[s]["sha"] != original[s]["sha"] for s in ("head", "base"))
+              ):
+                  return None
+              number, head, base = current["number"], current["head"]["sha"], current["base"]["sha"]
+              return {
+                  "schema": 1, "repository": REPO, "number": number,
+                  "head": head, "base": base,
+                  "request_key": f"{REPO}#{number}:{head}:{base}",
+              }
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              # Redirects could send the private webhook URL or API token elsewhere.
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          def main():
+              with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as stream:
+                  event = json.load(stream)
+              event_name = os.environ.get("GITHUB_EVENT_NAME")
+              if select(event, event.get("pull_request"), event_name) is None:
+                  print("Skipped: ineligible event.")
+                  return
+              number = event["number"]
+              opener = urllib.request.build_opener(NoRedirect)
+              request = urllib.request.Request(
+                  f"https://api.github.com/repos/{REPO}/pulls/{number}",
+                  headers={
+                      "Accept": "application/vnd.github+json",
+                      "Authorization": "Bearer " + os.environ["GH_READ_TOKEN"],
+                      "X-GitHub-Api-Version": "2022-11-28",
+                      "User-Agent": "cloudroom-review-forwarder",
+                  },
+              )
+              with opener.open(request, timeout=10) as response:
+                  current = json.load(response)
+              payload = select(event, current, event_name)
+              if payload is None:
+                  print("Skipped: PR closed, draft, ineligible, or changed.")
+                  return
+              target = os.environ.get("REVIEW_WEBHOOK", "")
+              parsed = urllib.parse.urlsplit(target)
+              if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+                  raise ValueError("Webhook configuration invalid")
+              request = urllib.request.Request(
+                  target, data=json.dumps(payload).encode("utf-8"),
+                  headers={"Content-Type": "application/json"}, method="POST",
+              )
+              # One POST only: retries after ambiguous network failures can duplicate reviews.
+              with opener.open(request, timeout=10) as response:
+                  if not 200 <= response.status < 300:
+                      raise ValueError("Webhook rejected")
+              print("Review requested for validated PR/head/base.")
+
+          if __name__ == "__main__":
+              try:
+                  main()
+              except Exception:
+                  # Exception strings and response bodies can contain the secret URL.
+                  print("Review forwarding failed; inspect configuration and delivery state before retrying.")
+                  raise SystemExit(1)
+          PY
