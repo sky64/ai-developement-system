@@ -13,7 +13,7 @@ Date: 2026-10-22. Run from orchestrator thread thr_nveh5eysxj. Scope: two behavi
 | Side effect of the pending request | Four of the child's Bash calls failed with the message that the thread was already awaiting user interaction. Each succeeded on retry. |
 | Sandbox artifact | Inside sandboxed commands, `git status` lists phantom untracked dotfiles because the sandbox bind-mounts /dev/null over them. The real worktree was clean. |
 
-Conclusion: accept-edits escalated network access to the owner and failed closed without a grant. It did not prompt for the in-worktree write. The out-of-worktree write was caught by the hook, not by the permission mode, so the permission layer's handling of out-of-worktree writes remains untested.
+Conclusion: under accept-edits, Cloudroom raised a pending network-access grant request, nobody granted it, the curl command timed out after 10 seconds with exit 28 and HTTP code 000, and the orchestrator denied the request afterwards. Whether the permission layer enforced the denial, rather than the command simply timing out while the request was pending, remains unverified. Accept-edits did not prompt for the in-worktree write. The out-of-worktree write was caught by the hook, not by the permission mode, so the permission layer's handling of out-of-worktree writes remains untested.
 
 ## Test 2: stop and resume
 
