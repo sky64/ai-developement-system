@@ -46,4 +46,31 @@ The pull request that adds this file is the first to exercise that path: authore
 | The bot cannot approve its own pull request | Relies on GitHub refusing self-approval; not tested here |
 | The bot cannot bypass branch protection | Expected because it is not an admin; not tested here |
 
+## Automated path, 2026-10-22
+
+PR 2 was authored by `Solvela-bot`, reviewed by Codex thread thr_h93fu5fccb at cbec74d, then approved and merged by the owner `sky64` on 2026-10-22 ([pull request 2](https://github.com/sky64/ai-developement-system/pull/2)). After that, the device-code login was replaced by a stored token, so cloud threads can push without a manual login.
+
+| Item | State |
+|---|---|
+| Token | A classic personal access token for `Solvela-bot`, scope `repo` |
+| Storage | The owner's 1Password vault `Agents`, item `Solvela-bot GitHub token` |
+| Cloud copy | Copied once into Cloudroom's cloud environment as `GH_AGENT_TOKEN` |
+| Guard in sandboxes | Every cloud thread receives `ORCHESTRATOR_GUARD=off` from the cloud environment, so the write guard is off there. The sandbox is the boundary and the checkout is the implementer workspace. |
+| Git setup | A cloud setup script sets the Git author to `Solvela-bot` and a `github.com` credential helper that reads `GH_AGENT_TOKEN` at push time |
+| Tooling | [tools/op/new-agent-token.sh](../tools/op/new-agent-token.sh) creates such an item from [tools/op/agent-token.template.json](../tools/op/agent-token.template.json) and can copy it into the cloud environment |
+
+The first cloud attempt, thread thr_wnjaz3ftp5, halted for two reasons: the setup script did not find the checkout at `/code`, and the guard override was not yet an environment variable. Both were fixed before this run.
+
+The device-code OAuth grant used for PR 2 is to be revoked by the owner. Its status is unconfirmed.
+
+### Unverified
+
+| Claim | Status |
+|---|---|
+| This run is the test of the automated path | The pull request that adds this section is its first use; its outcome is recorded on the pull request |
+| Device-code OAuth grant revoked | Unconfirmed |
+| Token storage in 1Password | Stated by the owner; not inspected from a sandbox. In this run's sandbox, `GH_AGENT_TOKEN` was set and the GitHub API reported actor `Solvela-bot` with scope `repo` |
+| `op item create` and `room-cli cloud env set` usage in the script | Checked with stub commands only; not run against 1Password or Cloudroom |
+| Token rotation, self-approval refusal, and branch protection bypass | Still untested, as listed above |
+
 Related: [capability matrix](02-compatibility-matrix.md), [setup record](03-cloudroom-setup.md).

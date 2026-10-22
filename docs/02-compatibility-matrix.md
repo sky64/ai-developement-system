@@ -44,7 +44,7 @@ Cloudroom's current CLI advertises interactions. That is grounds to test them, n
 
 | Channel | Intended role | Evidence required |
 |---|---|---|
-| GitHub app/mobile web | Human review, checks, merge | Owner approves a new PR authored by the restricted agent identity |
+| GitHub app/mobile web | Human review, checks, merge | Owner approves a new PR authored by the restricted agent identity. Approval and merge of PR 2 verified 2026-10-22, see [09-agent-identity.md](09-agent-identity.md); the device used for that approval was not recorded |
 | Cloudroom mobile web | Monitor and interact with supported threads | Denial verified end to end on 2026-10-22 from the Cloudroom phone app; approval verified only as far as the permission gate, see [08-matrix-tests.md](08-matrix-tests.md). Question response and stop from the phone remain Untested |
 | Claude app/Remote Control | Optional Claude-specific monitoring/interactions | Verify the actual session is reachable and permission prompts work; do not assume a Cloudroom session automatically appears |
 | Other harness apps/chat gateways | Deferred | Add only if a verified requirement remains unmet |
@@ -55,7 +55,7 @@ As of 2026-10-22 one phone-action path has been tested: the owner denied and app
 
 | Requirement | Mechanism | Current status / limitation |
 |---|---|---|
-| Human approval before merge | Restricted agent identity + required owner review + no agent rule editing/bypass | Configured 2026-10-22: main requires one approving review with admin enforcement, and the agent identity `Solvela-bot` has write, not admin. First exercised by the PR recorded in [09-agent-identity.md](09-agent-identity.md); bypass and self-approval refusal untested |
+| Human approval before merge | Restricted agent identity + required owner review + no agent rule editing/bypass | Verified 2026-10-22: PR 2 was authored by `Solvela-bot`, reviewed by Codex thread thr_h93fu5fccb, then approved and merged by the owner, see [09-agent-identity.md](09-agent-identity.md). Main requires one approving review with admin enforcement, and `Solvela-bot` has write, not admin. The PR adding the automated path is the first from a Cloudroom cloud sandbox. Token rotation, bypass and self-approval refusal untested |
 | Private-repo branch protection | Eligible GitHub plan | Documented; actual eligibility Untested |
 | No self-approval of PR | Distinct human and agent actors | Documented GitHub restriction; actors are distinct since 2026-10-22, see [09-agent-identity.md](09-agent-identity.md); refusal not tested |
 | Deployment approval | Eligible Environment reviewers, separately verified platform gate, or owner-only manual deployment | Deferred; Environment reviewers are public-only on Free/Pro/Team |
