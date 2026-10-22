@@ -39,7 +39,7 @@ Conclusion: stop killed the running shell, the partial step stayed visible in th
 | Further record | A further grant request, pint_3ga3atzqmy, appeared during the reruns and was resolved without orchestrator action. |
 | Feedback | The orchestrator sent a Cloudroom feedback report about interaction records that stay pending after app decisions. |
 
-Conclusion: phone denial is verified end to end. Phone approval is verified only as far as the permission gate, because the approved route failed at the egress proxy with a repeatable 502 and no approved request produced HTTP 200. Whether the phone approval itself or the CLI grant cleared the gate cannot be separated from this evidence. The stale-record behavior is a Cloudroom defect that blocks the next tool call after a decision.
+Conclusion: phone denial is verified end to end. Phone approval is verified only as far as the permission gate, because the approved route failed at the egress proxy with a repeatable 502 and no approved request produced HTTP 200. Whether the phone approval itself or the CLI grant cleared the gate cannot be separated from this evidence. Observed behavior: interaction records stayed pending after decisions and the next command was rejected. This was reported to Cloudroom as a suspected defect; the cause is unconfirmed.
 
 ## Hard limits
 
