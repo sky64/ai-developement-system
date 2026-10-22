@@ -14,12 +14,17 @@ Recorded 2026-10-22. This file states what was configured and what the first pul
 
 On 2026-10-22 the owner had the orchestrator (thread thr_nveh5eysxj) invite the account as a collaborator with write permission. The owner accepted the invitation from that account and created a fine-grained personal access token scoped to this repository with contents and pull requests set to read and write.
 
-## Token handling
+## Credential handling
 
-- The token reaches an implementer thread only through `room-cli secret request`.
-- It is written to an untracked `.env.agent` file in the implementer's worktree. The `.gitignore` pattern `.env.*` covers it.
-- It is never printed, echoed, logged, or committed.
-- Pushes and pull requests use a separate `gh` configuration directory, selected with `GH_CONFIG_DIR`, authenticated with that token. The owner's own `gh` login is not used for agent pushes.
+The intended path was a fine-grained personal access token delivered through `room-cli secret request` into an untracked `.env.agent` file, never printed or committed. Two attempts on 2026-10-22 failed:
+
+1. The first token identified as `sky64`, not the bot.
+2. The second token identified as `Solvela-bot` but could not write to this repository. A fine-grained token can only reach repositories owned by its own account, and this repository is owned by `sky64`.
+
+The push and pull request were therefore made with gh's device-code OAuth login as `Solvela-bot`, into a throwaway configuration directory selected with `GH_CONFIG_DIR` and deleted afterwards. No token file was written to the worktree for that path. The owner's own `gh` login was not used for agent pushes.
+
+- The OAuth grant does not expire unless it is revoked in the Solvela-bot account's authorized OAuth apps.
+- A classic personal access token would be the alternative to the device-code login.
 
 ## Merge gate
 
@@ -37,7 +42,7 @@ The pull request that adds this file is the first to exercise that path: authore
 
 | Claim | Status |
 |---|---|
-| Token rotation practice | Not defined or tested |
+| Credential rotation practice | Not defined or tested; the OAuth grant stays valid until revoked |
 | The bot cannot approve its own pull request | Relies on GitHub refusing self-approval; not tested here |
 | The bot cannot bypass branch protection | Expected because it is not an admin; not tested here |
 
