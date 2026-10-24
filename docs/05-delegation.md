@@ -12,7 +12,7 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 | Independent reviewer | Codex child thread in its own worktree | No. Reviews the diff between base and head. |
 | Read-only investigation | The orchestrator itself. Native subagents are unavailable inside Cloudroom threads (verified 2026-10-21 in thread thr_nveh5eysxj: the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead`). ECC agent definitions are used as role prompts for Cloudroom child threads. | No. The orchestrator reads and runs checks; anything that writes runs as a child thread, apart from the trivial direct-edit exception in Task tiers. |
 
-ECC agent definitions are role prompts, not in-process helpers, inside Cloudroom. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it.
+ECC agent definitions are role prompts, not in-process helpers, inside Cloudroom. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it, except the orchestrator on a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
 
 ## Task tiers
 
@@ -50,7 +50,7 @@ Required for normal and risky tasks. Trivial tasks may skip it and use a general
 4. Skills the implementer must load, by name. If a needed skill does not exist, author it first through a separate child task and review it. Never leave a TODO skill that an agent is told to invoke.
 5. If no implementer fits: spawn a child to author a new project agent from the template below, review it with Codex, commit it, then run the task.
 
-Generalists are allowed only for simple tasks: documentation, configuration, or a single-file change with no new logic. Even then the orchestrator delegates; it does not write.
+Generalists are allowed only for simple tasks: documentation, configuration, or a single-file change with no new logic. Even then the orchestrator delegates and does not write, unless the task is trivial, the owner says so in that turn, and the session runs with `ORCHESTRATOR_GUARD=off`.
 
 ## Task record
 
