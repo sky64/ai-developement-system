@@ -37,7 +37,7 @@ The original setup above ran on the machine omarchy-sky64. The machine omarchy i
 | Claude instruction discovery | Verified in thread thr_tcveg9itrp: CLAUDE.md, AGENTS.md and .bb/AGENTS.md loaded |
 | ECC plugin | Found absent, then installed as ecc@ecc 2.2.3 at user scope from the official marketplace affaan-m/ECC. The standard hook profile was set by thr_tcveg9itrp through the plugin configure command; hook execution is untested until a new session runs. |
 | ECC common rules | Copied to ~/.claude/rules/ecc/common by thread thr_gjh7a4ifhu, then removed by the same thread on owner decision the same day, because they conflict with the delegation policy. See [known conflicts](05-delegation.md#known-conflicts) and [decision 0001](decisions/0001-tiered-protocol.md). |
-| GateGuard hooks | Fact-forcing hooks disabled for this project in .claude/settings.json by thread thr_gjh7a4ifhu; effect untested until a new session runs |
+| GateGuard hooks | Edit/Write fact prompt disabled and routine Bash fact prompt suppressed for this project in .claude/settings.json by thread thr_gjh7a4ifhu; destructive-command check kept on; effect untested until a new session runs |
 | Codex instruction discovery | Untested on this machine |
 | Codex trust for this checkout | Untested on this machine |
 | Claude launcher | ~/.local/bin/claude still runs the mise step; not edited |

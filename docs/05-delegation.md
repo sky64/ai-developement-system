@@ -6,17 +6,19 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 
 | Role | Runs as | May write? |
 |---|---|---|
-| Orchestrator | Claude thread in the project checkout | No. Reads, runs checks, selects specialists, spawns children, routes review, reports. |
+| Orchestrator | Claude thread in the project checkout | No, with one exception. Reads, runs checks, selects specialists, spawns children, routes review, reports. It may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`; see Task tiers. |
 | Specialist implementer | Claude child thread in its own Cloudroom worktree, acting as one named agent | Yes, its assigned files only. One writer per file set. |
 | Specialist implementer, cloud | Claude child thread in a Cloudroom cloud sandbox, acting as one named agent | Yes, its assigned files only. The guard is off through the cloud environment (`ORCHESTRATOR_GUARD=off`); the sandbox is the boundary. See [09-agent-identity.md](09-agent-identity.md). |
 | Independent reviewer | Codex child thread in its own worktree | No. Reviews the diff between base and head. |
-| Read-only investigation | The orchestrator itself. Native subagents are unavailable inside Cloudroom threads (verified 2026-10-21 in thread thr_nveh5eysxj: the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead`). ECC agent definitions are used as role prompts for Cloudroom child threads. | No. The orchestrator reads and runs checks; anything that writes runs as a child thread. |
+| Read-only investigation | The orchestrator itself. Native subagents are unavailable inside Cloudroom threads (verified 2026-10-21 in thread thr_nveh5eysxj: the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead`). ECC agent definitions are used as role prompts for Cloudroom child threads. | No. The orchestrator reads and runs checks; anything that writes runs as a child thread, apart from the trivial direct-edit exception in Task tiers. |
 
 ECC agent definitions are role prompts, not in-process helpers, inside Cloudroom. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it.
 
 ## Task tiers
 
 Adopted 2026-10-24, see [decision 0001](decisions/0001-tiered-protocol.md). The orchestrator names the tier in the spawn prompt. When in doubt, pick the higher tier. These are task tiers for process weight, not the action-approval tiers in the historical audit.
+
+Risk decides the tier, not size or file type. Any change to delegation policy, AGENTS.md, `.claude/settings.json`, hook scripts, or any other protection setting is risky, even a one-line edit. The examples below are illustrations and risk overrides them.
 
 | Tier | Examples | Implementer | Reviewer | Record |
 |---|---|---|---|---|
@@ -52,7 +54,7 @@ Generalists are allowed only for simple tasks: documentation, configuration, or 
 
 ## Task record
 
-Each delegated task records scope, base commit, assigned files, acceptance criteria, permission mode, deadline, hard limits, retry allowance, the selection above, the implementer's commit, the reviewer's findings, and the owner's decision. The orchestrator asks an implementer to write the record; it does not write it itself.
+The record depends on the tier. Trivial: the commit message. Normal: scope, base commit, assigned files, acceptance criteria, the selection above, the implementer's commit, the reviewer's findings, and the owner's decision. Risky: all of that plus permission mode, deadline, hard limits, and retry allowance. The orchestrator asks an implementer to write any record beyond the spawn prompt; it does not write it itself.
 
 ## Specialist agent template
 
@@ -100,4 +102,4 @@ The ECC common rules, when copied to `~/.claude/rules/ecc/common/`, tell agents 
 
 The ECC plugin Bash hook `block-no-verify` scans quoted prompt text and once blocked a `room-cli thread spawn`. It stays enabled; reword prompts instead, because it protects implementer worktrees from hook bypass.
 
-The ECC GateGuard fact-forcing hooks (`pre:bash:gateguard-fact-force`, `pre:edit-write:gateguard-fact-force`) block the first Bash, Edit and Write call of a session until the agent restates facts. They are disabled for this project through `ECC_DISABLED_HOOKS` in the `env` key of `.claude/settings.json`. The GateGuard destructive-command check is not in that list and stays on.
+The ECC GateGuard script `gateguard-fact-force.js` runs two checks on Bash: a routine fact prompt before the first Bash call of a session, and a destructive-command check on every call. Both run under the single hook ID `pre:bash:gateguard-fact-force`, so disabling that ID would also turn off the destructive check. This project therefore keeps that ID enabled and sets `GATEGUARD_BASH_ROUTINE_DISABLED=1` in the `env` key of `.claude/settings.json`, which suppresses only the routine Bash prompt. The Edit and Write fact prompt, hook ID `pre:edit-write:gateguard-fact-force`, has no destructive check and is disabled through `ECC_DISABLED_HOOKS` in the same block. Verified against the plugin's `hooks/README.md` and the script source on 2026-10-24; the effect in a new session is untested.
