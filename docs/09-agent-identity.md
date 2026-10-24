@@ -84,4 +84,36 @@ Codex review thread thr_zysv79xr8t on be70987 raised five findings; all fixed in
 - P2, this file: the two setup fixes were stated as done. Fix: qualified as reported by the orchestrator thread and confirmed only by step 0 observations.
 - P2, README.md, [02-compatibility-matrix.md](02-compatibility-matrix.md), [03-cloudroom-setup.md](03-cloudroom-setup.md): an approved merge was called verification of the merge gate. Fix: changed to exercised, with rejection of a merge without approval marked untested.
 
+## Cloud sandbox gh identity, 2026-10-24
+
+Cloud sandboxes ran `gh` as the owner while `git` pushed as the bot. Each fact below names the thread that verified it.
+
+| Fact | Thread |
+|---|---|
+| Cloud sandboxes received the owner gh OAuth login in `~/.config/gh/hosts.yml` with scopes gist, read:org, repo, workflow. Git pushed as `Solvela-bot`, but `gh pr create` ran as the owner. PR 7 was authored by `sky64` for that reason, then closed and reopened as PR 8 by the bot. | thr_2erzejsmq2 |
+| Cloud environment variables are not visible while the setup script runs, so the script cannot read `GH_AGENT_TOKEN`. | thr_9dbwrgqajd |
+| The agent Bash tool is a non-interactive, non-login bash, so shell profiles and `BASH_ENV` are not read. | thr_934skikdma, thr_348hizihbb |
+| `gh auth login --with-token` rejects the agent token because it lacks `read:org`. | thr_5niyzuxj6v |
+
+Fix applied by thr_tcveg9itrp: the cloud setup script now removes the owner gh login from each new sandbox. The owner set `GH_TOKEN` in the Cloudroom cloud environment from the 1Password item. `gh` reads `GH_TOKEN` without a scope check.
+
+Verified in a fresh sandbox by thr_fvep9rwfpj:
+
+- `gh api user` returns `Solvela-bot`.
+- `gh auth status` shows only the `GH_TOKEN` account, with scope `repo`.
+- `hosts.yml` no longer contains `sky64`.
+- Git `user.name` is `Solvela-bot`.
+- `gh pr view` works.
+
+The setup script log line still mentions `BASH_ENV` and the shell profiles. Those writes are harmless leftovers.
+
+Feedback about owner tokens in agent sandboxes was sent to Cloudroom.
+
+### Unverified
+
+| Claim | Status |
+|---|---|
+| Cloudroom does not rely on the removed owner login after setup | Untested |
+| Token rotation | Now two cloud keys to update, `GH_AGENT_TOKEN` and `GH_TOKEN`; rotation itself is still untested |
+
 Related: [capability matrix](02-compatibility-matrix.md), [setup record](03-cloudroom-setup.md).

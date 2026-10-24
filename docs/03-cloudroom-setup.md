@@ -42,6 +42,7 @@ The original setup above ran on the machine omarchy-sky64. The machine omarchy i
 | Codex trust for this checkout | Untested on this machine |
 | Claude launcher | ~/.local/bin/claude still runs the mise step; not edited |
 | Credentials and loops | No credentials were copied from another machine; no loops were enabled |
+| Cloud sandbox gh identity | Cloud sandboxes had the owner gh login, so `gh pr create` ran as the owner; the setup script now removes it and `GH_TOKEN` makes gh act as `Solvela-bot`, verified by thread thr_fvep9rwfpj. See [Cloud sandbox gh identity](09-agent-identity.md#cloud-sandbox-gh-identity-2026-10-24). |
 
 Provider availability and login checks do not prove a model request, role handoff, sandbox, or approval gate works.
 
