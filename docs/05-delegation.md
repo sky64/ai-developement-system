@@ -14,6 +14,18 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 
 ECC agent definitions are role prompts, not in-process helpers, inside Cloudroom. Any agent that writes runs as a Cloudroom child thread so Cloudroom can see, stop, and inspect it.
 
+## Task tiers
+
+Adopted 2026-10-24, see [decision 0001](decisions/0001-tiered-protocol.md). The orchestrator names the tier in the spawn prompt. When in doubt, pick the higher tier. These are task tiers for process weight, not the action-approval tiers in the historical audit.
+
+| Tier | Examples | Implementer | Reviewer | Record |
+|---|---|---|---|---|
+| Trivial | Docs, config, a single file, no new logic | One child thread, generalist allowed | None | The commit message |
+| Normal | Features, bug fixes, tests, hook or script changes | One specialist child thread | One Codex child thread | Scope, base commit, files, acceptance criteria in the spawn prompt |
+| Risky | Money path, auth, credentials, CI or deploy, AGENTS.md policy, anything that merges or runs unattended | One specialist child thread, attended | One Codex child thread, up to two correction cycles | Full record: the above plus permission mode, deadline, hard limits, retry allowance |
+
+The orchestrator may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`. Otherwise it delegates at every tier.
+
 ## Enforcement
 
 `tools/hooks/orchestrator-guard.py` is a Claude Code PreToolUse hook wired in `.claude/settings.json`. In the main checkout it blocks Edit, Write, MultiEdit, NotebookEdit, and Bash commands that write files or mutate Git. The Bash check is quote aware and operator aware: the whole command is tokenized once with `shlex` in POSIX mode with the shell operator characters as punctuation, so quoted text stays one token and `;`, `&`, `|`, `(`, `)`, redirects and newlines become their own tokens; the token stream is then split into simple commands on those operators. Parse failures deny: unterminated quotes, any token containing `$(` or a backtick, an unknown operator run, or a redirect without a target. A Bash call with a missing or null command denies. Each simple command is inspected: Git is allowed only for an explicit read-only subcommand list (`log`, `diff`, `status`, `rev-parse`, `cat-file` and the like) after skipping global options such as `-c` and `--git-dir`; `tag`, `branch`, `stash`, `worktree`, `remote`, `config` and `submodule` are allowed only when every argument is a listing or read form (for example `remote -v`, `remote show`, `remote get-url`, `config --get`, `config get`, `config --show-origin`); every other Git subcommand is denied. `sed -i` anywhere in the arguments, file-writing utilities and Python write calls are denied. Output redirects are checked on the token stream, so `>` inside a quoted string is not a write; targets other than `/dev/null`, `/tmp` and `$TMPDIR` (without `..`) are denied. A single plain `room-cli` command with no operator tokens is exempt. In a Git worktree, Bash is not checked, and the file write tools are allowed only when the real path of the target is inside the real path of the worktree. Malformed hook input is denied. Unit test: `bash tools/hooks/test-orchestrator-guard.sh`.
@@ -28,7 +40,7 @@ What this is and is not:
 
 ## Specialist selection, required for every task
 
-The orchestrator records this before any child starts, in the task thread or PR:
+Required for normal and risky tasks. Trivial tasks may skip it and use a generalist. The orchestrator records this before any child starts, in the task thread or PR:
 
 1. Tech and domain of the change.
 2. Search, in order: project agents in `.claude/agents/`; the ECC roster (`/ecc:ecc-guide` or the agent list in the session); existing skills in the repo and plugins.
@@ -84,8 +96,8 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 
 ## Known conflicts
 
-The machine-wide ECC rules in `~/.claude/rules/ecc/common/` tell agents to start native subagents immediately and to use parallel Task execution. In this project those rules are overridden by this policy for anything that writes. The guard enforces the override in the checkout; in a worktree it is the implementer's prompt that holds.
+The ECC common rules, when copied to `~/.claude/rules/ecc/common/`, tell agents to start native subagents immediately and to use parallel Task execution. That conflicts with this policy for anything that writes, and ECC rule files support `paths` frontmatter for inclusion only, so a machine-wide copy cannot be excluded for one project. The copy made on 2026-10-24 was removed the same day by owner decision, see [decision 0001](decisions/0001-tiered-protocol.md). Do not re-copy it. ECC skills and agents stay available on demand.
 
-The ECC plugin Bash hook `block-no-verify` scans quoted prompt text and once blocked a `room-cli thread spawn`. It can be disabled per project by setting `ECC_DISABLED_HOOKS` to `pre:bash:block-no-verify` in the `env` key of `.claude/settings.json`. The recommendation is to keep it enabled and reword prompts, because it protects implementer worktrees from hook bypass.
+The ECC plugin Bash hook `block-no-verify` scans quoted prompt text and once blocked a `room-cli thread spawn`. It stays enabled; reword prompts instead, because it protects implementer worktrees from hook bypass.
 
-ECC rule files support `paths` frontmatter for inclusion only, so the machine-wide common rules cannot be excluded for one project. This policy relies on project precedence plus the guard.
+The ECC GateGuard fact-forcing hooks (`pre:bash:gateguard-fact-force`, `pre:edit-write:gateguard-fact-force`) block the first Bash, Edit and Write call of a session until the agent restates facts. They are disabled for this project through `ECC_DISABLED_HOOKS` in the `env` key of `.claude/settings.json`. The GateGuard destructive-command check is not in that list and stays on.
