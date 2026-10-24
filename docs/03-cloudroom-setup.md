@@ -23,7 +23,7 @@ This repository is the setup workspace for the installed Cloudroom app. Another 
 
 ## Current state as of 2026-10-24, machine omarchy
 
-The original setup above ran on the machine omarchy-sky64. The machine omarchy is now the primary. The facts below were verified on it on 2026-10-24.
+The original setup above ran on the machine omarchy-sky64. The machine omarchy is now the primary. The facts below were verified on it by thread thr_tcveg9itrp on 2026-10-24 unless a row names another thread.
 
 | Item | Result |
 |---|---|
@@ -35,7 +35,7 @@ The original setup above ran on the machine omarchy-sky64. The machine omarchy i
 | Environment providers | project-checkout and git-worktree registered; worktree creation verified by thread thr_gjh7a4ifhu, which wrote this section |
 | Orchestrator write guard | Unit test passed; the guard denied a live compound Bash command in thread thr_tcveg9itrp |
 | Claude instruction discovery | Verified in thread thr_tcveg9itrp: CLAUDE.md, AGENTS.md and .bb/AGENTS.md loaded |
-| ECC plugin | Found absent, then installed as ecc@ecc 2.2.3 at user scope from the official marketplace affaan-m/ECC, hooks enabled on the standard profile |
+| ECC plugin | Found absent, then installed as ecc@ecc 2.2.3 at user scope from the official marketplace affaan-m/ECC. The standard hook profile was set by thr_tcveg9itrp through the plugin configure command; hook execution is untested until a new session runs. |
 | ECC common rules | Copied to ~/.claude/rules/ecc/common by thread thr_gjh7a4ifhu; the plugin cannot ship rules itself. See [known conflicts](05-delegation.md#known-conflicts). |
 | Codex instruction discovery | Untested on this machine |
 | Codex trust for this checkout | Untested on this machine |
