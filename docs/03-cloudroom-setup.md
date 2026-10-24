@@ -21,6 +21,27 @@ This repository is the setup workspace for the installed Cloudroom app. Another 
 | Automatic Codex PR review | Verified one closed-PR skip and one attended opened-event Actions → fresh Codex static review of PR 5 at head 22656cc, with no findings or GitHub writes; see [10-automatic-review.md](10-automatic-review.md). Next revision's synchronize review pending. Owner approval/merge stay manual; durable deduplication, runtime caps and credential/Mac isolation remain unverified. |
 | Orchestrator write guard | Hook and unit test added 2026-10-20; live test passed on 2026-10-20. See the [enforcement test](06-enforcement-test.md). |
 
+## Current state as of 2026-10-24, machine omarchy
+
+The original setup above ran on the machine omarchy-sky64. The machine omarchy is now the primary. The facts below were verified on it on 2026-10-24.
+
+| Item | Result |
+|---|---|
+| Machine | Hostname omarchy, Omarchy 4.0.4-1 |
+| Cloudroom | room-cli 0.43.1 connected to project proj_kdhmc76x6e, machine host_9u8rs24enx |
+| Claude provider | Registered; direct binary 2.1.300 logged in through claude.ai |
+| Codex provider | Registered; codex-cli 0.163.0 logged in using ChatGPT |
+| GitHub CLI | gh logged in as the owner |
+| Environment providers | project-checkout and git-worktree registered; worktree creation verified by thread thr_gjh7a4ifhu, which wrote this section |
+| Orchestrator write guard | Unit test passed; the guard denied a live compound Bash command in thread thr_tcveg9itrp |
+| Claude instruction discovery | Verified in thread thr_tcveg9itrp: CLAUDE.md, AGENTS.md and .bb/AGENTS.md loaded |
+| ECC plugin | Found absent, then installed as ecc@ecc 2.2.3 at user scope from the official marketplace affaan-m/ECC, hooks enabled on the standard profile |
+| ECC common rules | Copied to ~/.claude/rules/ecc/common by thread thr_gjh7a4ifhu; the plugin cannot ship rules itself. See [known conflicts](05-delegation.md#known-conflicts). |
+| Codex instruction discovery | Untested on this machine |
+| Codex trust for this checkout | Untested on this machine |
+| Claude launcher | ~/.local/bin/claude still runs the mise step; not edited |
+| Credentials and loops | No credentials were copied from another machine; no loops were enabled |
+
 Provider availability and login checks do not prove a model request, role handoff, sandbox, or approval gate works.
 
 Claude's launcher at ~/.local/bin/claude runs a mise update/configuration step on every invocation. A status check through that wrapper timed out. A read-only check using the installed binary resolved by mise which claude succeeded. The wrapper has not been edited; if thread startup also stalls, investigate it before changing provider permissions or reinstalling Claude.
