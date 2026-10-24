@@ -9,4 +9,4 @@ Both files are copied verbatim from <https://github.com/affaan-m/ECC>.
 
 Copyright (c) 2026 Affaan Mustafa
 
-Released under the MIT License. The full license text is in the LICENSE file at the root of the source repository.
+Released under the MIT License. The full license text, copied verbatim from the LICENSE file of tag v2.2.3, is in [LICENSE-ECC](LICENSE-ECC).
