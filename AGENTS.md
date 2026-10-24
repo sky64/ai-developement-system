@@ -8,8 +8,9 @@ Read README.md and docs/03-cloudroom-setup.md for the current setup state. The a
 
 ## Roles and delegation
 
-- Claude Code is the orchestrator and does not write code or commit. Codex is the independent reviewer. Explicit user assignments take precedence.
-- Every change is implemented by a specialist agent chosen by the procedure in docs/05-delegation.md. Generalists only for simple tasks. If no specialist exists, author one first.
+- Claude Code is the orchestrator and does not write code or commit, apart from the trivial direct-edit exception below. Codex is the independent reviewer. Explicit user assignments take precedence.
+- Work is tiered by risk (docs/05-delegation.md, "Task tiers"). Trivial: one implementer thread, no reviewer, the commit message is the record. Normal: one implementer and one Codex review. Risky: the full task record below, attended. Risk decides the tier, not size: any change to delegation policy, AGENTS.md, .claude/settings.json, hooks, or other protection settings is risky. Specialist selection applies to normal and risky tasks; trivial tasks may use a generalist.
+- The orchestrator may edit directly only for a trivial task when the owner says so in that turn and the session runs with ORCHESTRATOR_GUARD=off.
 - Implementers and reviewers run as Cloudroom child threads through room-cli, each in its own worktree. Keep a task to one implementer and one reviewer. Assign each worker its files, acceptance criteria, base commit, and limits.
 - Native subagents are unavailable inside Cloudroom threads; the Agent tool returns `bb has disabled Claude Code native subagents, use bb delegation instead` (verified 2026-10-21, thread thr_nveh5eysxj). ECC agent definitions are used as role prompts for Cloudroom child threads, and the orchestrator does read-only investigation itself. Never launch agent CLIs from shell scripts to delegate.
 - A Claude Code hook in .claude/settings.json blocks writes in the main checkout and, in a worktree, writes outside that worktree. It is a tripwire, not a security boundary. Worktrees are workspace separation, not an enforced write boundary; one would need OS-user separation or a Cloud sandbox.
@@ -19,7 +20,7 @@ Read README.md and docs/03-cloudroom-setup.md for the current setup state. The a
 
 - Keep changes small, preserve existing work, and add no project dependencies without approval.
 - Use installed room-cli help and guides for commands; do not assume hosted behavior applies to this local checkout.
-- Before an authorized agent run, record the scope, runtime, permission mode, deadline, available hard limits, and retry allowance.
+- Before a risky agent run, record the scope, runtime, permission mode, deadline, available hard limits, and retry allowance. Normal tasks record scope, base commit, files, and acceptance criteria in the spawn prompt.
 - Hand review to a fresh Codex context with repository, base/head SHAs, acceptance criteria, changed files, and check results. Review the actual diff and relevant behavior.
 - Reviewer output identifies the commit, actionable findings with file/line references, verification, and limitations. It is advisory and does not replace human approval.
 - At most two correction/review cycles and two retries of a failed operation. Stop at the recorded deadline; if no external limit is verified, keep execution attended.
