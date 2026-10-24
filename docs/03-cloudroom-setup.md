@@ -35,9 +35,9 @@ The original setup above ran on the machine omarchy-sky64. The machine omarchy i
 | Environment providers | project-checkout and git-worktree registered; worktree creation verified by thread thr_gjh7a4ifhu, which wrote this section |
 | Orchestrator write guard | Unit test passed; the guard denied a live compound Bash command in thread thr_tcveg9itrp |
 | Claude instruction discovery | Verified in thread thr_tcveg9itrp: CLAUDE.md, AGENTS.md and .bb/AGENTS.md loaded |
-| ECC plugin | Found absent, then installed as ecc@ecc 2.2.3 at user scope from the official marketplace affaan-m/ECC. The standard hook profile was set by thr_tcveg9itrp through the plugin configure command; hook execution is untested until a new session runs. |
+| ECC plugin | Installed as ecc@ecc 2.2.3, then uninstalled the same day by thread thr_tcveg9itrp on owner decision, see [decision 0002](decisions/0002-bare-minimum-harness.md). The marketplace registration `ecc` remains for per-project installs. The skills git-workflow and coding-standards are vendored in this repo under `.claude/skills/`. |
 | ECC common rules | Copied to ~/.claude/rules/ecc/common by thread thr_gjh7a4ifhu, then removed by the same thread on owner decision the same day, because they conflict with the delegation policy. See [known conflicts](05-delegation.md#known-conflicts) and [decision 0001](decisions/0001-tiered-protocol.md). |
-| GateGuard hooks | Edit/Write fact prompt disabled and routine Bash fact prompt suppressed for this project in .claude/settings.json by thread thr_gjh7a4ifhu; destructive-command check kept on; effect untested until a new session runs |
+| GateGuard hooks | Not applicable, ECC removed |
 | Codex instruction discovery | Untested on this machine |
 | Codex trust for this checkout | Untested on this machine |
 | Claude launcher | ~/.local/bin/claude still runs the mise step; not edited |

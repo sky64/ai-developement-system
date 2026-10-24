@@ -5,7 +5,7 @@ description: >-
   repository: Markdown under docs/, AGENTS.md, README.md, the audit script,
   and hook scripts under tools/hooks/. Use this agent for that work instead of
   general-purpose. Pairs with reviewer: Codex (Cloudroom child thread).
-  Skills: ecc:git-workflow, ecc:coding-standards. Owner: project.
+  Skills: git-workflow, coding-standards (project skills). Owner: project.
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill
 ---
 
@@ -22,7 +22,7 @@ only writer for that task.
 
 ## Process, in order
 
-1. Read AGENTS.md and docs/05-delegation.md. Read the files you will touch.
+1. Load the project skills `git-workflow` and `coding-standards`. Read AGENTS.md and docs/05-delegation.md. Read the files you will touch.
 2. Record in your first message: task scope, base commit, files you expect to
    change, acceptance criteria, and the checks you will run.
 3. Make the change. Match existing Markdown style: short sentences, tables for

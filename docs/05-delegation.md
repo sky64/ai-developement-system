@@ -45,7 +45,7 @@ What this is and is not:
 Required for normal and risky tasks. Trivial tasks may skip it and use a generalist. The orchestrator records this before any child starts, in the task thread or PR:
 
 1. Tech and domain of the change.
-2. Search, in order: project agents in `.claude/agents/`; the ECC roster (`/ecc:ecc-guide` or the agent list in the session); existing skills in the repo and plugins.
+2. Search, in order: project skills and agents under `.claude/`, then the plugins a project enables in its own `.claude/settings.json`.
 3. Chosen agent and why. If an ECC agent fits but only as a reviewer, pair a project implementer with it.
 4. Skills the implementer must load, by name. If a needed skill does not exist, author it first through a separate child task and review it. Never leave a TODO skill that an agent is told to invoke.
 5. If no implementer fits: spawn a child to author a new project agent from the template below, review it with Codex, commit it, then run the task.
@@ -98,8 +98,4 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 
 ## Known conflicts
 
-The ECC common rules, when copied to `~/.claude/rules/ecc/common/`, tell agents to start native subagents immediately and to use parallel Task execution. That conflicts with this policy for anything that writes, and ECC rule files support `paths` frontmatter for inclusion only, so a machine-wide copy cannot be excluded for one project. The copy made on 2026-10-24 was removed the same day by owner decision, see [decision 0001](decisions/0001-tiered-protocol.md). Do not re-copy it. ECC skills and agents stay available on demand.
-
-The ECC plugin Bash hook `block-no-verify` scans quoted prompt text and once blocked a `room-cli thread spawn`. It stays enabled; reword prompts instead, because it protects implementer worktrees from hook bypass.
-
-The ECC GateGuard script `gateguard-fact-force.js` runs two checks on Bash: a routine fact prompt before the first Bash call of a session, and a destructive-command check on every call. Both run under the single hook ID `pre:bash:gateguard-fact-force`, so disabling that ID would also turn off the destructive check. This project therefore keeps that ID enabled and sets `GATEGUARD_BASH_ROUTINE_DISABLED=1` in the `env` key of `.claude/settings.json`, which suppresses only the routine Bash prompt. The Edit and Write fact prompt, hook ID `pre:edit-write:gateguard-fact-force`, has no destructive check and is disabled through `ECC_DISABLED_HOOKS` in the same block. Verified against the plugin's `hooks/README.md` and the script source on 2026-10-24; the effect in a new session is untested.
+The ECC plugin was removed machine-wide on 2026-10-24 by owner decision, see [decision 0002](decisions/0002-bare-minimum-harness.md). Projects that want ECC pieces vendor specific skills or enable the plugin at project scope, and accept its roughly 47k always-on tokens.
