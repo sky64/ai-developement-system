@@ -25,7 +25,7 @@ This replaces the text that made merge and production deployment owner-performed
   - It was built on the server (node 24, `npm ci`, `npm run build`).
   - `server.check --guest` ran before and after: the same two pre-existing FAILs (G10 and E3) and six new C-pin PASS lines.
   - `terminal-command-web.service` was restarted at 18:22:50Z, timed away from the estate-ping and guest-probe timers.
-  - Verified: `/healthz` shows 12 sources with `desks.contract` ok, the fill64 and oracle64 units untouched, no failed units, guest unaffected.
+  - Verified: `/healthz` shows 12 sources with `desks.contract` ok, the fill64 and oracle64 units untouched, `systemctl --user --failed` was empty before and after the restart; the guest surface answered `/healthz` 200 `ok:true` with `spool_age_s` 3.3 after the restart.
   - `/healthz` overall `ok` remains false because the three `tape.*` sources have been failing since early October (the orderflow dashboard on 8787 is down). That predates the deploy.
   - The whole-repo rsync in the floor handoff was not used: the server checkout holds an uncommitted edit to `fill64/fill64/bin/news.py` that a full sync would have reverted.
 
