@@ -59,7 +59,7 @@ The flag loads the directory for one session and writes nothing to settings. A l
 
 1. Create a Cloudroom project pointed at the application repository, not this one.
 2. Start the orchestrator thread in that project.
-3. The orchestrator spawns children into the same project with `room-cli thread spawn --parent-self --project "$ROOM_PROJECT_ID" ...` (flags as given in the Cloudroom thread instructions; `room-cli thread --help` in this sandbox lists only `--shared-sandbox` and `--top-level` for `spawn`).
+3. The orchestrator spawns children into the same project with `room-cli thread spawn --parent-self --project "$ROOM_PROJECT_ID" ...`. Flags vary by runtime (Local or Cloud threads); run `room-cli thread spawn --help` in the installed CLI. Observed 2026-10-25 from the Local orchestrator thread, a cloud child from a Local parent was started with `--parent-self --project --provider claude-code --model --reasoning-level --machine cloud --base-branch`. The provider id is `claude-code`. The permission mode is implied full on cloud and must not be passed.
 4. The cloud environment needs `ORCHESTRATOR_GUARD=off`, `GH_AGENT_TOKEN`, and the Git identity setup (author `Solvela-bot`, a `github.com` credential helper that reads `GH_AGENT_TOKEN`), exactly as in [09-agent-identity.md](09-agent-identity.md) and [03-cloudroom-setup.md](03-cloudroom-setup.md). Child sandboxes are the boundary; the guard is off there.
 5. Protect `main` in the application repository the way [09-agent-identity.md](09-agent-identity.md) describes for this repository (one approving review, admin enforcement, no force pushes).
 
@@ -78,11 +78,13 @@ The specialist selection step in [05-delegation.md](05-delegation.md) searches t
 
 ## Make the session an orchestrator
 
-A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`:
+A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`. Every session in the project reads that file, including child threads, so the line is scoped to the orchestrator:
 
 ```markdown
-At session start, invoke the ai-dev-system:orchestrator skill. This session is the orchestrator and does not write or commit.
+If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a child role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.
 ```
+
+A spawn prompt must name the child role explicitly (for example "You are the implementer"), otherwise the child may read the line above as applying to it. The skill also tells a session with an explicitly assigned child role to keep that role.
 
 The skill reads `${CLAUDE_PLUGIN_ROOT}/AGENTS.md` and `${CLAUDE_PLUGIN_ROOT}/docs/05-delegation.md`. The [skills reference](https://code.claude.com/docs/en/skills.md) states that `${CLAUDE_PLUGIN_ROOT}` is substituted in plugin skill content. The application's own `AGENTS.md` and `CLAUDE.md` govern application specifics. Statements in this repository's `AGENTS.md` about itself (setup workspace, no application build, its verification list) refer to the development-system repository. The orchestrator does not write or commit.
 

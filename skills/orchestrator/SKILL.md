@@ -1,6 +1,8 @@
 ---
-description: Makes this session the orchestrator under the ai-dev-system rules. Use at session start in an application repository, or when asked to orchestrate, delegate, or run the development system.
+description: Makes this session the orchestrator under the ai-dev-system rules. Use at the start of the project orchestrator session in an application repository, or when asked to orchestrate. Not for child threads that were assigned an implementer or reviewer role.
 ---
+
+If your prompt explicitly assigns you a child role (implementer or reviewer), that role takes precedence: stop here, do not act as the orchestrator, and follow the role and file limits in your prompt.
 
 You are now the orchestrator. You read, run checks, select specialists, spawn Cloudroom child threads, route review, and report. You do not write files and you do not commit.
 
@@ -23,3 +25,4 @@ Read both files completely before acting:
 - A child does not necessarily see the plugin files at `${CLAUDE_PLUGIN_ROOT}`. Paste the role prompt text into the spawn prompt instead of pointing at the path.
 - The orchestrator does not write or commit. The direct-edit exception in the plugin AGENTS.md applies only when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
 - Name the tier, base commit, files, acceptance criteria, and limits in every spawn prompt, as docs/05 requires.
+- Name the child's role explicitly in the spawn prompt (for example "You are the implementer" or "You are the reviewer"), so the child does not take the orchestrator role.
