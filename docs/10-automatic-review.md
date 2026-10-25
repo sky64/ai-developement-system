@@ -185,7 +185,7 @@ after inspecting keys/nonsecret fields; do not print the full result.
 
 The parent handles authorized staging and secret installation. Review of this
 change must use a separate fresh Codex context with base/head and checks.
-The owner must approve/merge before the trusted workflow is live on main.
+A human must approve (merge per the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md)) before the trusted workflow is live on main.
 A bot-created PR opened before that merge will not automatically retrigger;
 use a later authorized supported event, such as reopening an eligible PR.
 

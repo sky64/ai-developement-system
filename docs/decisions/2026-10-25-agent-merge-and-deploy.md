@@ -4,7 +4,7 @@ Date: 2026-10-25. Status: accepted by the owner in orchestrator thread thr_9zai9
 
 ## Source
 
-The owner (Kenneth Dixon) ruled: "I want to know when a merge happens but not to be the one to do it", and separately "I would rather you deploy". The first merge performed under this rule is the floor PR, sky64/floor#1.
+The owner (Kenneth Dixon) ruled: "I want to know when a merge happens but not to be the one to do it", and separately "I would rather you deploy". The owner merged sky64/floor#1 from the GitHub web UI at 2026-10-25T17:06:58Z, merge commit 976f5d0 (parents 56c5ccb and bda911d), a few minutes before the rule reached the agent. The agent made no merge call. No agent-performed merge has happened yet, so the capability is not exercised.
 
 ## Rule
 
@@ -19,4 +19,4 @@ This replaces the text that made merge and production deployment owner-performed
 ## Untested
 
 - Whether a merge without the required approval is rejected by branch protection.
-- Any deployment under this rule. None has been performed yet.
+- Any agent-performed merge or deployment under this rule. None has been performed yet.
