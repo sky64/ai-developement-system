@@ -1,0 +1,14 @@
+{
+  "name": "ai-dev-system",
+  "description": "Single-plugin marketplace so app repositories can enable the ai-dev-system plugin from GitHub",
+  "owner": {
+    "name": "Kenneth Dixon"
+  },
+  "plugins": [
+    {
+      "name": "ai-dev-system",
+      "source": "./",
+      "description": "Orchestrator-does-not-write development system for Cloudroom projects"
+    }
+  ]
+}
