@@ -180,6 +180,16 @@ raw 2 "Bash without command"  "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_inp
 raw 2 "Bash with null command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":null}}"
 raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":[\"ls\"]}}"
 
+# Plugin wiring: run the exact command from hooks/hooks.json, with the plugin
+# root variable set the way Claude Code sets it, in the main checkout.
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+PLUGIN_CMD="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["PreToolUse"][0]["hooks"][0]["command"])' "$ROOT/hooks/hooks.json")"
+err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | CLAUDE_PLUGIN_ROOT="$ROOT" ORCHESTRATOR_GUARD= bash -c "$PLUGIN_CMD" 2>&1 >/dev/null)"; got=$?
+# A missing script also exits 2 with stderr, so require the guard's own message.
+if [ "$got" = 2 ] && [ -n "$err" ] && case "$err" in "orchestrator-guard: denied"*) true;; *) false;; esac; then echo "ok   exit $got  plugin hooks.json command denies Write in main checkout"
+else echo "FAIL exit $got (want 2, stderr '$err')  plugin hooks.json command"; fail=1; fi
+
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{}}' "$M" | ORCHESTRATOR_GUARD=off python3 -I "$HOOK" 2>/dev/null \
   && echo "ok   override ORCHESTRATOR_GUARD=off allows" || { echo "FAIL override"; fail=1; }
 exit $fail
