@@ -35,6 +35,7 @@ Branch protection on `main` requires one approving review, with admin enforcemen
 - The owner cannot merge without a reviewer approving the pull request.
 - Standing authorization (owner ruling, 2026-10-25): `Solvela-bot` performs merges and production deployments once the independent Codex review is clean and the orchestrator has verified it. Each one is reported to the owner in the task thread and recorded on the pull request with the merge SHA and time. The owner may revoke or narrow this at any time. See the [decision note](decisions/2026-10-25-agent-merge-and-deploy.md).
 - Self-approval limit: the bot cannot approve its own pull request, and main requires one approving review. The merge still waits for a human approval, and that is recorded on the pull request, not hidden. Whether a merge without approval is rejected remains untested.
+- First uses (2026-10-25): Solvela-bot merged sky64/floor PR 2 at 17:20:37Z (merge commit 1d0db41, unprotected base) and this repository's PR 10 at 18:22:40Z (merge commit 30ea1e3) after the owner's approving review; branch protection accepted the second. Details in the [decision note](decisions/2026-10-25-agent-merge-and-deploy.md).
 
 ## First gated pull request
 
@@ -74,7 +75,7 @@ The device-code OAuth grant used for PR 2 is to be revoked by the owner. Its sta
 | Token storage in 1Password | Stated by the owner; not inspected from a sandbox. In this run's sandbox, `GH_AGENT_TOKEN` was set and the GitHub API reported actor `Solvela-bot` with scope `repo` |
 | `op item create` and `room-cli cloud env set` usage in the script | Checked with stub commands only; not run against 1Password or Cloudroom |
 | Token rotation, self-approval refusal, and branch protection bypass | Still untested, as listed above |
-| Merge without approval is rejected | Untested; PR 2 exercised only the approved merge |
+| Merge without approval is rejected | Untested; PR 2 and PR 10 exercised only approved merges |
 
 ### Review cycle 1
 
