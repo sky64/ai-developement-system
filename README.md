@@ -4,6 +4,8 @@ Project configuration for the existing Cloudroom installation: Claude orchestrat
 
 Start with the [Cloudroom setup record](docs/03-cloudroom-setup.md). This repository is the setup workspace; another application repository is not required. Shared instructions are in [AGENTS.md](AGENTS.md), wired through [.bb/AGENTS.md](.bb/AGENTS.md) for Cloudroom and [CLAUDE.md](CLAUDE.md) for Claude.
 
+To use this system in an application repository without copying files, install it as a Claude Code plugin: [docs/11-plugin-install.md](docs/11-plugin-install.md).
+
 The [architecture proposal](docs/01-architecture-proposal.md) and [capability matrix](docs/02-compatibility-matrix.md) define the intended boundaries and remaining checks. Additional harnesses and production deployment are deferred. Jev was tried once as a second opinion, recorded in the [Jev pilot](docs/07-jev-pilot.md); it is not integrated.
 
 The [automatic Codex review trial](docs/10-automatic-review.md) stages a trusted Actions filter and fresh Cloudroom reviewers for eligible bot PRs. Offline tests pass; delivery, cost controls, and runtime boundaries still need an attended live trial. Human approval remains manual; merging is governed by the [2026-10-25 standing authorization](docs/decisions/2026-10-25-agent-merge-and-deploy.md).
