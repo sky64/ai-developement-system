@@ -28,7 +28,7 @@ Cloudroom manages sessions and execution. GitHub holds code, checks, review evid
 |---|---|---|
 | Lead and implementer | Claude Code in a Cloudroom thread | Intake, implementation, verification, explicit handoff to review |
 | Independent reviewer | Codex in a separate Cloudroom thread/context | Inspect the specified commit, reproduce relevant behavior, report findings |
-| Owner | Human, using a separate GitHub identity from agents | Repository administration, code approval, merge, production access |
+| Owner | Human, using a separate GitHub identity from agents | Repository administration, code approval, production access; merge is performed by the agent identity under the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md) |
 | CI | GitHub Actions | Run the application's existing relevant checks |
 
 These are assignments, not permanent model dependencies. Another supported provider can fill a role after its runtime behavior is verified. Harness/model subscription login is separate from GitHub authorization.
