@@ -54,7 +54,7 @@ Generalists are allowed only for simple tasks: documentation, configuration, or 
 
 ## Task record
 
-The record depends on the tier. Trivial: the commit message. Normal: scope, base commit, assigned files, acceptance criteria, the selection above, the implementer's commit, the reviewer's findings, and the owner's decision. Risky: all of that plus permission mode, deadline, hard limits, and retry allowance. The orchestrator asks an implementer to write any record beyond the spawn prompt; it does not write it itself.
+The record depends on the tier. Trivial: the commit message. Normal: scope, base commit, assigned files, acceptance criteria, the selection above, the implementer's commit, the reviewer's findings, and the owner notification. The owner is notified of every merge and deployment rather than deciding each one; see [AGENTS.md](../AGENTS.md). Risky: all of that plus permission mode, deadline, hard limits, and retry allowance. The orchestrator asks an implementer to write any record beyond the spawn prompt; it does not write it itself.
 
 ## Specialist agent template
 

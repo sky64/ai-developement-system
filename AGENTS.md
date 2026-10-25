@@ -39,10 +39,11 @@ There is no application build or package dependency installation at present.
 
 - Do not print secrets, read credential values, copy personal authentication into worktrees, or commit audit output without review.
 - Prepare reversible project changes within the user's request. Do not install global tooling, remove ECC/custom files, or change shared machine settings without authorization.
-- Merge, production deployment, new paid services, permission changes, and external communications require explicit authorization.
+- Merge and production deployment are performed by the agent identity (Solvela-bot), not the owner, only after the independent Codex review is clean and the orchestrator has verified it. This is a standing authorization from the owner, who may revoke or narrow it at any time ([decision](docs/decisions/2026-10-25-agent-merge-and-deploy.md)). Where branch protection requires an approving review the agent cannot give itself, the merge waits for a human approval.
+- New paid services, permission changes, external communications, and credential changes require explicit per-case authorization.
 - The current GitHub actor is the owner. This bootstrap setup is not proof of a restricted agent identity or enforced human-review gate.
 - Do not represent instructions, hooks, branches, provider flags, or read-only vault access as security boundaries. Test the actual external boundary.
 
 ## Completion
 
-Report what changed, what was checked, and what remains untested. Keep task evidence in the PR/issue and consequential architecture decisions in docs/decisions when needed. Update the setup record when a capability is actually verified.
+Report what changed, what was checked, and what remains untested. Keep task evidence in the PR/issue and consequential architecture decisions in docs/decisions when needed. Update the setup record when a capability is actually verified. Report every merge and every deployment to the owner in the task thread, and record it on the PR with the merge SHA and time.
