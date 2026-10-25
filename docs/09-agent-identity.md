@@ -31,8 +31,10 @@ The push and pull request were therefore made with gh's device-code OAuth login 
 Branch protection on `main` requires one approving review, with admin enforcement and no force pushes. Consequences:
 
 - The bot can push branches and open pull requests.
-- A write collaborator can merge once protection requirements pass. Merging without the required approval is expected to be blocked by branch protection; this is untested. Owner-only merging is procedure here, not an enforced restriction.
+- A write collaborator can merge once protection requirements pass. Merging without the required approval is expected to be blocked by branch protection; this is untested. Owner-only merging was procedure, not an enforced restriction, and is superseded by the standing authorization below.
 - The owner cannot merge without a reviewer approving the pull request.
+- Standing authorization (owner ruling, 2026-10-25): `Solvela-bot` performs merges and production deployments once the independent Codex review is clean and the orchestrator has verified it. Each one is reported to the owner in the task thread and recorded on the pull request with the merge SHA and time. The owner may revoke or narrow this at any time. See the [decision note](decisions/2026-10-25-agent-merge-and-deploy.md).
+- Self-approval limit: the bot cannot approve its own pull request, and main requires one approving review. The merge still waits for a human approval, and that is recorded on the pull request, not hidden. Whether a merge without approval is rejected remains untested.
 
 ## First gated pull request
 

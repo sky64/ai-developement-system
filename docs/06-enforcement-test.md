@@ -1,5 +1,7 @@
 # Enforcement test: orchestrator write guard and first delegated run
 
+Note 2026-10-25: owner-merge statements in this record predate the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md).
+
 Date: 2026-10-20. Run from orchestrator thread thr_nveh5eysxj. Scope: land the delegation policy from [05-delegation.md](05-delegation.md) through a delegated implementer, then probe the guard from two Claude threads, one in the checkout and one in a worktree. All facts below were confirmed by the orchestrator thread; nothing here was re-run while writing this record.
 
 ## Run record

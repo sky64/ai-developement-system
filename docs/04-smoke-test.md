@@ -1,5 +1,7 @@
 # Smoke test: Claude implementation → Codex review
 
+Note 2026-10-25: owner-merge statements in this record predate the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md).
+
 Date: 2026-10-19. Requested by the owner in Cloudroom thread thr_nveh5eysxj. Scope: create this file, commit it locally, start one Codex child thread to review the commit, and report. No push, merge, permission change, or credential access.
 
 ## Run record

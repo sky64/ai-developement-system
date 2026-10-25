@@ -2,7 +2,7 @@
 
 Status: **REVISED PROPOSAL; project instructions added, pilot not yet run.** Updated 2026-10-19 after independent review. This document replaces the earlier architecture in full. [00](00-audit-and-architecture-proposal.md) is a historical audit; [02](02-compatibility-matrix.md) records current evidence and untested capabilities.
 
-The first milestone is one real task through Claude implementation, independent Codex review, CI, owner approval, and merge in one repository. This setup repository is the initial workspace; another application repository is optional. OpenCode, Hermes, Pi, and decision models remain future options. See the [setup record](03-cloudroom-setup.md) for the instruction foundation and current provider checks.
+The first milestone is one real task through Claude implementation, independent Codex review, CI, owner approval, and merge in one repository (merge by the agent identity after the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md)). This setup repository is the initial workspace; another application repository is optional. OpenCode, Hermes, Pi, and decision models remain future options. See the [setup record](03-cloudroom-setup.md) for the instruction foundation and current provider checks.
 
 ## 1. Evidence and unresolved prerequisites
 
@@ -28,7 +28,7 @@ Cloudroom manages sessions and execution. GitHub holds code, checks, review evid
 |---|---|---|
 | Lead and implementer | Claude Code in a Cloudroom thread | Intake, implementation, verification, explicit handoff to review |
 | Independent reviewer | Codex in a separate Cloudroom thread/context | Inspect the specified commit, reproduce relevant behavior, report findings |
-| Owner | Human, using a separate GitHub identity from agents | Repository administration, code approval, merge, production access |
+| Owner | Human, using a separate GitHub identity from agents | Repository administration, code approval, production access; merge is performed by the agent identity under the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md) |
 | CI | GitHub Actions | Run the application's existing relevant checks |
 
 These are assignments, not permanent model dependencies. Another supported provider can fill a role after its runtime behavior is verified. Harness/model subscription login is separate from GitHub authorization.
@@ -60,7 +60,7 @@ After confirming plan eligibility, the owner configures the target repository:
 - Select the expected CI App as check source where supported; agents must not satisfy checks by submitting arbitrary statuses.
 - Protect workflow and deployment changes through the same human review.
 
-These settings do not reserve the merge button exclusively for the owner after approval; owner-only merging remains the pilot procedure unless separately enforced. The enforced target is that an agent cannot merge **without** owner approval.
+These settings do not reserve the merge button exclusively for the owner after approval; owner-only merging was the pilot procedure and is superseded by the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md). The enforced target is that an agent cannot merge **without** owner approval.
 
 Private-repository [branch protection requires an eligible paid GitHub plan](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches). Record eligibility and inspect effective rules. If protection is unavailable, stop the enforcement milestone: a voluntary review convention must not be reported as an enforced gate.
 
@@ -111,7 +111,7 @@ Document each control as observed, tested, proposed, or unavailable. Where enfor
 | Independent review | Codex inspects the diff and relevant behavior in a separate context and reports findings as PR comments or linked review output | Findings, tests, risks, and reviewed SHA |
 | Correction | Implementer fixes findings; changed commits receive another review within the remaining budget | Updated checks and review |
 | Approval | Owner reviews the final commit and CI results under the human identity | GitHub approval |
-| Integration | Owner merges after the gates pass; record outcome in the PR | Merge SHA and brief result |
+| Integration | Merge after the gates pass (owner at the time of writing; superseded by the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md): the agent identity merges and reports); record outcome in the PR | Merge SHA and brief result |
 
 A `needs-review` label is informational in the pilot; there is no watcher or automatic reviewer trigger. Reviewer results must identify the final commit. If the head changes, earlier findings remain historical and approval must be refreshed as configured. CI success alone does not prove acceptance criteria.
 
@@ -190,7 +190,7 @@ Reuse existing repository conventions. This system repository now holds the shar
 | Milestone | Scope | Exit evidence |
 |---|---|---|
 | A. Establish prerequisites | Use this setup repository first; verify plan, separate GitHub identity, runtime boundaries, relevant checks, and supported limits | Redacted capability/permission record; owner configures gates |
-| B. Prove one task | Claude implements; Codex independently reviews; CI runs; owner approves and merges | Task, PR, final reviewed SHA, approval, CI and merge evidence |
+| B. Prove one task | Claude implements; Codex independently reviews; CI runs; owner approves and merges (merging superseded by the [2026-10-25 standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md)) | Task, PR, final reviewed SHA, approval, CI and merge evidence |
 | C. Exercise failure/recovery | Reject unauthorized push/merge, fail CI, interrupt a task, simulate provider unavailability, resume safely | Disposable test evidence and documented residual risks |
 | D. Verify mobile operation | Test the chosen phone interfaces with the actual providers/mode | Per-action pass/fail record; no inference from CLI help |
 | Later, individually justified | OpenCode, parallel implementers, Hermes, Pi, decision models, deployment automation | Separate scope, cost, credentials, and acceptance criteria |
