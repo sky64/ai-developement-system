@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Run gh as Solvela-bot. The token is read from 1Password for this one
 # invocation and passed through GH_TOKEN; nothing is written to disk.
+# Tracing would print the token, so it is switched off before anything else.
+{ set +x; } 2>/dev/null
 set -euo pipefail
 if ! token="$(op read 'op://Agents/Solvela-bot GitHub token/credential' 2>/dev/null)" || [ -z "$token" ]; then
   echo "gh-bot: could not read the bot token from 1Password (locked or missing)" >&2

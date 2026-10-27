@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Store an agent GitHub token in the 1Password vault Agents.
-# Usage: new-agent-token.sh TITLE USERNAME HOSTNAME EXPIRY_YYYY-MM-DD [CLOUD_ENV_KEY]
+# Usage: new-agent-token.sh TITLE USERNAME HOSTNAME EXPIRY_YYYY-MM-DD
 # The token is read from the terminal without echo and is never printed.
-# With CLOUD_ENV_KEY, the stored credential is also copied into Cloudroom's
-# cloud environment under that key.
 # Tracing would print the token, so it is switched off and never re-enabled.
 set +x
 set -euo pipefail
@@ -13,8 +11,8 @@ die() {
   exit "${2:-64}"
 }
 
-if [ "$#" -lt 4 ] || [ "$#" -gt 5 ]; then
-  echo "usage: $0 TITLE USERNAME HOSTNAME EXPIRY_YYYY-MM-DD [CLOUD_ENV_KEY]" >&2
+if [ "$#" -ne 4 ]; then
+  echo "usage: $0 TITLE USERNAME HOSTNAME EXPIRY_YYYY-MM-DD" >&2
   exit 64
 fi
 
@@ -22,19 +20,13 @@ title=$1
 username=$2
 hostname=$3
 expiry=$4
-env_key=${5:-}
 template="$(cd "$(dirname "$0")" && pwd)/agent-token.template.json"
 
 # Validate everything before asking for the token or creating anything.
 [ -n "$title" ] || die "title must not be empty"
 [ -n "$username" ] || die "username must not be empty"
 [ -n "$hostname" ] || die "hostname must not be empty"
-if [ "$#" -eq 5 ] && [ -z "$env_key" ]; then
-  die "CLOUD_ENV_KEY must not be empty when given"
-fi
-
 required=(op python3)
-[ -n "$env_key" ] && required+=(room-cli)
 for cmd in "${required[@]}"; do
   command -v "$cmd" >/dev/null 2>&1 || die "required command not found on PATH: $cmd" 69
 done
@@ -81,15 +73,3 @@ json.dump(item, sys.stdout)
 unset token
 [ -n "$item_id" ] || die "op item create returned no item id" 1
 echo "Created 1Password item $item_id in vault Agents." >&2
-
-if [ -n "$env_key" ]; then
-  # Read into a variable first so a failed or empty read never reaches
-  # room-cli and cannot change the cloud environment.
-  if ! credential=$(op read "op://Agents/$item_id/credential"); then
-    die "op read failed; cloud environment not changed" 1
-  fi
-  [ -n "$credential" ] || die "op read returned nothing; cloud environment not changed" 1
-  printf '%s' "$credential" | room-cli cloud env set "$env_key"
-  unset credential
-  echo "Copied credential into cloud environment key $env_key." >&2
-fi

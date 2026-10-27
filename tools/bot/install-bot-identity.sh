@@ -6,8 +6,9 @@
 # under ~/Projects, plus repositories cloned directly under ~/orca/workspaces.
 # Main checkouts keep the owner's identity and gh credential helper.
 #
-# Writes: ~/.config/git/orca-bot.gitconfig, one includeIf block appended to
-# ~/.config/git/config, and two symlinks in ~/.local/bin. Idempotent.
+# Writes: orca-bot.gitconfig and one includeIf block in the XDG git config
+# directory (~/.config/git by default), and two symlinks in ~/.local/bin.
+# Idempotent.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git"
@@ -29,9 +30,9 @@ if ! grep -qF "$marker" "$cfg/config" 2>/dev/null; then
 
 $marker
 [includeIf "gitdir:~/Projects/*/.git/worktrees/"]
-	path = ~/.config/git/orca-bot.gitconfig
+	path = $cfg/orca-bot.gitconfig
 [includeIf "gitdir:~/orca/workspaces/"]
-	path = ~/.config/git/orca-bot.gitconfig
+	path = $cfg/orca-bot.gitconfig
 CFG
   echo "appended includeIf block to $cfg/config"
 else

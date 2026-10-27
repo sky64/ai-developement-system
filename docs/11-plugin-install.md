@@ -8,7 +8,7 @@ Status: the manifests validate statically and the hook command passes a simulate
 
 | Path | Component | Purpose |
 |---|---|---|
-| `.claude-plugin/plugin.json` | Manifest | Name `ai-dev-system`, version `0.1.0` |
+| `.claude-plugin/plugin.json` | Manifest | Name `ai-dev-system`, version `0.2.0` |
 | `.claude-plugin/marketplace.json` | Marketplace | One-plugin catalog whose plugin source is the repository root (`"./"`) |
 | `hooks/hooks.json` | Hook | The PreToolUse write guard, same matcher and timeout as `.claude/settings.json`, path through `${CLAUDE_PLUGIN_ROOT}` |
 | `agents/docs-engineer.md` | Agent | Role prompt for documentation and tooling work, usable in a repository that has none of this repository's files |
@@ -43,7 +43,7 @@ The key `ai-dev-system@ai-dev-system` is `<plugin>@<marketplace>`. Claude Code h
 
 ### Updates
 
-`plugin.json` pins `"version": "0.1.0"`. Per the [loading reference](https://code.claude.com/docs/en/plugins/loading.md), a pinned version keeps users on that version until it changes, so bump `version` in the same change as any plugin content change that application repositories should receive.
+`plugin.json` pins `"version": "0.2.0"`. Per the [loading reference](https://code.claude.com/docs/en/plugins/loading.md), a pinned version keeps users on that version until it changes, so bump `version` in the same change as any plugin content change that application repositories should receive.
 
 ### Local development
 
