@@ -2,7 +2,7 @@
 
 Decision 2026-10-25 (owner): application repositories stay separate from this one, and the development system is installed into any application repository without copying files. This repository is the plugin: the repository root is the plugin root.
 
-Status: the manifests validate statically and the hook command passes a simulated invocation (see [Verification](#verification)). Loading the plugin in a live Claude Code session, and in a Cloudroom cloud thread, is untested.
+Status: the manifests validate statically and the hook command passes a simulated invocation (see [Verification](#verification)). Loading the plugin in a live Claude Code session, including one launched by Orca, is untested.
 
 ## What the plugin contains
 
@@ -55,15 +55,14 @@ claude --plugin-dir /path/to/ai-developement-system
 
 The flag loads the directory for one session and writes nothing to settings. A local directory marketplace (`claude plugin marketplace add /path/to/ai-developement-system`, then `claude plugin install ai-dev-system@ai-dev-system`) loads the plugin in place, so edits apply at the next session start or `/reload-plugins`. Both are documented; neither was run here.
 
-## Cloudroom project setup
+## Orca project setup
 
-1. Create a Cloudroom project pointed at the application repository, not this one.
-2. Start the orchestrator thread in that project.
-3. The orchestrator spawns children into the same project with `room-cli thread spawn --parent-self --project "$ROOM_PROJECT_ID" ...`. Flags vary by runtime (Local or Cloud threads); run `room-cli thread spawn --help` in the installed CLI. Observed 2026-10-25 from the Local orchestrator thread, a cloud child from a Local parent was started with `--parent-self --project --provider claude-code --model --reasoning-level --machine cloud --base-branch`. The provider id is `claude-code`. Cloud uses full permissions; omit the flag. Restricted permission modes are unsupported.
-4. The cloud environment needs `ORCHESTRATOR_GUARD=off`, `GH_AGENT_TOKEN`, and the Git identity setup (author `Solvela-bot`, a `github.com` credential helper that reads `GH_AGENT_TOKEN`), exactly as in [09-agent-identity.md](09-agent-identity.md) and [03-cloudroom-setup.md](03-cloudroom-setup.md). Child sandboxes are the boundary; the guard is off there.
-5. Protect `main` in the application repository the way [09-agent-identity.md](09-agent-identity.md) describes for this repository (one approving review, admin enforcement, no force pushes).
+1. Register the application repository with Orca (`orca repo add --path <repo>`) and set its base ref (`orca repo set-base-ref --repo path:<repo> --ref origin/main`).
+2. Enable the plugin in the application repository's `.claude/settings.json` as above and add the orchestrator line to its `CLAUDE.md` (next section). Start the orchestrator session in the repository's main checkout from Orca.
+3. The orchestrator starts implementers and reviewers as Orca workers in their own worktrees, following `orca skills get orca-cli` and `orca skills get orchestration`. Agent worktrees commit and push as `Solvela-bot` through the machine-level identity include and credential helper installed by `tools/bot/install-bot-identity.sh` ([12-orca-setup.md](12-orca-setup.md)).
+4. Protect `main` in the application repository the way [09-agent-identity.md](09-agent-identity.md) describes for this repository (one approving review, admin enforcement, no force pushes).
 
-Whether a Cloudroom cloud thread loads the plugin from the application repository's `.claude/settings.json` is untested. The Claude Code documentation says a Claude Code cloud session (including claude.ai/code) does not load plugins that the repository's `.claude/settings.json` turns on and does not add `extraKnownMarketplaces` from a repository ([Install a plugin](https://code.claude.com/docs/en/plugins/install.md), [Plugin loading reference](https://code.claude.com/docs/en/plugins/loading.md)). Cloudroom runs Claude Code in its own sandbox, so that statement may or may not apply. If it does, the documented alternatives are plugins distributed through managed settings, or listing the absolute path of a checkout of this repository in the `CLAUDE_CODE_PLUGIN_DIRS` environment variable (Claude Code 2.1.280 or later, cannot be set from project or local settings). Neither was tried.
+Orca launches the real Claude Code binary on this machine with the user's configuration, so a committed `extraKnownMarketplaces` entry is expected to apply once the folder is trusted. This is untested; see [Verification](#verification).
 
 ## Where agents live
 
@@ -78,7 +77,7 @@ The specialist selection step in [05-delegation.md](05-delegation.md) searches t
 
 ## Make the session an orchestrator
 
-A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`. Every session in the project reads that file, including child threads, so the line is scoped to the orchestrator:
+A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`. Every session in the project reads that file, including workers, so the line is scoped to the orchestrator:
 
 ```markdown
 If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a child role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.
@@ -105,7 +104,7 @@ Run on the branch that added this page. Command output is recorded in the pull r
 | `bash tools/hooks/test-orchestrator-guard.sh` | Passes, including a case that runs the command string from `hooks/hooks.json` with `CLAUDE_PLUGIN_ROOT` set and expects exit 2 in a main checkout |
 | Hook command against a scratch clone of `sky64/floor`, main checkout and worktree | Simulated invocation only, see the pull request |
 
-Not tested: loading the plugin in a live Claude Code session, in a Cloudroom cloud thread, or inside the `floor` Cloudroom project; marketplace registration from the application repository's settings; the `.tmpl` file staying unregistered at runtime; plugin update behavior; the guard firing twice in this repository.
+Not tested: loading the plugin in a live Claude Code session or in an Orca-launched session for an application repository; marketplace registration from the application repository's settings; the `.tmpl` file staying unregistered at runtime; plugin update behavior; the guard firing twice in this repository.
 
 ## Documentation relied on
 

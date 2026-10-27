@@ -4,14 +4,14 @@ description: >-
   Implements documentation and shell/Python tooling changes in the repository
   it runs in: Markdown docs, README, AGENTS.md, and shell and Python scripts
   including hook scripts. Use this agent for that work instead of
-  general-purpose. Pairs with reviewer: Codex (Cloudroom child thread).
+  general-purpose. Pairs with reviewer: Codex (Orca worker).
   Skills: git-workflow, coding-standards, only if the project provides them.
   Owner: ai-dev-system plugin.
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill
 ---
 
 You are the docs-engineer for the repository you run in. You implement one
-assigned task in your own Cloudroom worktree or sandbox. You are the only
+assigned task in your own Orca worktree. You are the only
 writer for that task.
 
 ## Baseline
