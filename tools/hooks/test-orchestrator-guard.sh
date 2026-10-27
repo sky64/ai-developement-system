@@ -35,7 +35,9 @@ run 2 "$M" Bash   '{"command":"python3 -c \"open(\\\"f\\\",\\\"w\\\")\""}'
 run 0 "$M" Bash   '{"command":"git diff --check"}'
 run 0 "$M" Bash   '{"command":"cat README.md | head"}'
 run 0 "$M" Bash   '{"command":"cargo test 2>&1 | tail"}'
-run 0 "$M" Bash   '{"command":"room-cli thread spawn --parent-self --prompt x"}'
+run 0 "$M" Bash   '{"command":"orca worktree create --name t --agent claude --prompt x"}'
+run 0 "$M" Bash   '{"command":"orca-ide worktree create --name t --agent claude --prompt x"}'
+run 2 "$M" Bash   '{"command":"orca worktree create --prompt x > out.txt"}'
 run 0 "$M" Bash   '{"command":"ls > /dev/null; grep -r x . 2>/dev/null"}'
 run 0 "$M" Read   '{"file_path":"x.md"}'
 run 0 "$W" Write  '{"file_path":"x.md","content":"hi"}'
@@ -50,12 +52,12 @@ run 2 "$W" MultiEdit '{"file_path":"/tmp/outside.md","edits":[]}'
 run 2 "$W" NotebookEdit '{"notebook_path":"../main/n.ipynb","new_source":"x"}'
 run 2 "$W" Write  '{"content":"no path"}'
 
-# P1: room-cli exemption only for a single plain invocation.
-run 2 "$M" Bash   '{"command":"room-cli --version; git add README.md"}'
-run 2 "$M" Bash   '{"command":"room-cli --version && git commit -m x"}'
-run 2 "$M" Bash   '{"command":"room-cli status | tee out.txt"}'
-run 2 "$M" Bash   '{"command":"room-cli status $(git add README.md)"}'
-run 0 "$M" Bash   '{"command":"room-cli status --json"}'
+# P1: orca exemption only for a single plain invocation.
+run 2 "$M" Bash   '{"command":"orca status; git add README.md"}'
+run 2 "$M" Bash   '{"command":"orca status && git commit -m x"}'
+run 2 "$M" Bash   '{"command":"orca status | tee out.txt"}'
+run 2 "$M" Bash   '{"command":"orca status $(git add README.md)"}'
+run 0 "$M" Bash   '{"command":"orca status --json"}'
 
 # P2: git with leading global options, config writes, read-only forms.
 run 2 "$M" Bash   '{"command":"git -c user.name=x commit -m y"}'
@@ -112,7 +114,7 @@ raw 2 "missing tool_name"     "{\"cwd\":\"$M\",\"tool_input\":{\"file_path\":\"x
 raw 2 "tool_input not object" "{\"tool_name\":\"Write\",\"cwd\":\"$M\",\"tool_input\":\"x\"}"
 
 # Cycle 2, P2: quote-aware and operator-aware parsing.
-run 2 "$M" Bash   '{"command":"room-cli --version&git add README.md"}'
+run 2 "$M" Bash   '{"command":"orca status&git add README.md"}'
 run 2 "$M" Bash   '{"command":"git -c \"user.name=A;B\" commit -m x"}'
 run 2 "$M" Bash   '{"command":"\"git\" commit -m x"}'
 run 2 "$M" Bash   '{"command":"'"'"'git'"'"' add README.md"}'
@@ -136,7 +138,7 @@ run 0 "$M" Bash   '{"command":"ls 2>&1 >/dev/null"}'
 run 0 "$M" Bash   '{"command":"ls >/tmp/out.txt 2>&1"}'
 run 0 "$M" Bash   '{"command":"ls > $TMPDIR/out.txt; cat ${TMPDIR}/out.txt"}'
 run 2 "$M" Bash   '{"command":"echo \"$(git rev-parse HEAD)\" | cat"}'
-run 0 "$M" Bash   '{"command":"room-cli thread spawn --prompt '"'"'run tests; then git add x'"'"'"}'
+run 0 "$M" Bash   '{"command":"orca worktree create --prompt '"'"'run tests; then git add x'"'"'"}'
 
 # Cycle 2, P2: git remote/tag/branch/stash/worktree/config/submodule check every argument.
 run 2 "$M" Bash   '{"command":"git remote -v add up https://example.invalid/r.git"}'

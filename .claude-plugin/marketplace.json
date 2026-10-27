@@ -8,7 +8,7 @@
     {
       "name": "ai-dev-system",
       "source": "./",
-      "description": "Orchestrator-does-not-write development system for Cloudroom projects"
+      "description": "Orchestrator-does-not-write development system for Orca projects"
     }
   ]
 }

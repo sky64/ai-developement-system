@@ -4,8 +4,8 @@
 Policy (docs/05-delegation.md): a Claude session running in the project's
 main checkout is the orchestrator. It reads, runs checks, selects
 specialists, and routes review. It never edits tracked files or mutates Git.
-Implementers run as Cloudroom child threads in their own worktrees, where
-writes inside the worktree are allowed.
+Implementers run as Orca workers in their own worktrees, where writes
+inside the worktree are allowed.
 
 Decision rules:
 - Main checkout (git-dir equals git-common-dir): deny file write tools and
@@ -174,9 +174,12 @@ def split_commands(tokens):
     return commands, targets
 
 
-def is_single_room_cli(tokens) -> bool:
-    """Exempt only one plain room-cli invocation with no shell operators."""
-    return bool(tokens) and tokens[0] == "room-cli" and not any(
+ORCA_COMMANDS = {"orca", "orca-ide"}
+
+
+def is_single_orca_cli(tokens) -> bool:
+    """Exempt only one plain orca invocation with no shell operators."""
+    return bool(tokens) and tokens[0] in ORCA_COMMANDS and not any(
         is_operator(t) for t in tokens
     )
 
@@ -275,7 +278,7 @@ def segment_reason(argv):
 def bash_reason(cmd: str):
     try:
         tokens = tokenize(cmd)
-        if is_single_room_cli(tokens):
+        if is_single_orca_cli(tokens):
             return None
         commands, targets = split_commands(tokens)
     except ShellParseError as exc:
@@ -322,9 +325,9 @@ def path_outside_cwd(cwd: str, tool_input: dict):
 def deny(reason: str) -> int:
     sys.stderr.write(
         f"orchestrator-guard: denied ({reason}). The orchestrator does not "
-        "write or commit. Delegate the change to a specialist implementer as a "
-        "Cloudroom child thread in a worktree, and keep implementer writes "
-        "inside that worktree (see docs/05-delegation.md).\n"
+        "write or commit. Delegate the change to an implementer in an Orca "
+        "worktree (orca worktree create --agent ...), and keep implementer "
+        "writes inside that worktree (see docs/05-delegation.md).\n"
     )
     return 2
 
