@@ -8,7 +8,8 @@
 #
 # Writes: orca-bot.gitconfig and one includeIf block in the XDG git config
 # directory (~/.config/git by default), and two symlinks in ~/.local/bin.
-# Idempotent.
+# The include path is relative, which Git resolves against the including
+# file, so the directory never needs quoting. Idempotent.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git"
@@ -30,9 +31,9 @@ if ! grep -qF "$marker" "$cfg/config" 2>/dev/null; then
 
 $marker
 [includeIf "gitdir:~/Projects/*/.git/worktrees/"]
-	path = $cfg/orca-bot.gitconfig
+	path = orca-bot.gitconfig
 [includeIf "gitdir:~/orca/workspaces/"]
-	path = $cfg/orca-bot.gitconfig
+	path = orca-bot.gitconfig
 CFG
   echo "appended includeIf block to $cfg/config"
 else
