@@ -225,7 +225,16 @@ git -C "$W" -c user.name=t -c user.email=t@x init -q planted 2>/dev/null; git -C
 cfg "$W/planted" false
 cp "$M/.git/worktrees/wt/commondir" "$TMP/commondir.bak"; printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"
 run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # planted config inside cwd ignored
-cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted"
+# Codex review of PR 14: the same attack with the root EQUAL to the worktree
+# (a bare repo inside the worktree as commondir, config in the worktree root)...
+git init -q --bare "$W/fake-common" 2>/dev/null; printf '%s\n' "$W/fake-common" > "$M/.git/worktrees/wt/commondir"
+cfg "$W" false
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # root == worktree: ignored
+rm -rf "$W/fake-common" "$W/.claude"
+# ...and from a cwd NESTED inside the worktree, with the planted repo beside it.
+printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"; mkdir -p "$W/nested"
+run 2 "$W/nested" Write "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"      # planted root inside the worktree: ignored
+cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted" "$W/nested"
 # A hook that cannot import aidev_config must still deny (never crash open).
 mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \

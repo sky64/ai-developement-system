@@ -71,6 +71,20 @@ out="$(run "$M" status)"; case "$out" in *"guard=on"*) ok "status shows guard=on
 setfeat '0' model_ladder
 out="$(run "$M" get features.model_ladder)"; [ "$out" = "true" ] && ok "features.model_ladder 0 → default true" || bad "numeric switch: $out"
 
+# 13. the CLI applies the same trusted-root rule as the hook: a planted repo
+# inside the worktree, pointed at by commondir, is not a config source.
+cp "$DEFAULTS" "$M/.claude/ai-dev-system.json"
+git -C "$W" -c user.name=t -c user.email=t@x init -q planted 2>/dev/null; git -C "$W/planted" -c user.name=t -c user.email=t@x commit -q --allow-empty -m p
+mkdir -p "$W/planted/.claude"; python3 -I -c '
+import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$W/planted/.claude/ai-dev-system.json"
+cp "$M/.git/worktrees/wt/commondir" "$TMP/commondir.bak"; printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"
+out="$(run "$W" status)"
+case "$out" in *"config=none guard=on"*) ok "status ignores a planted config root inside the worktree";; *) bad "planted status: $out";; esac
+out="$(run "$W" get features.orchestrator_guard)"; [ "$out" = "true" ] && ok "get ignores the planted root too" || bad "planted get: $out"
+cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted"
+out="$(run "$W" status)"
+case "$out" in *"config=$M/.claude/ai-dev-system.json"*) ok "status reads the real main checkout again once commondir is restored";; *) bad "restored status: $out";; esac
+
 # 12. an unknown metering kind falls back to none; env overrides do not apply to metering
 setfeat '"bogus"' metering
 out="$(run "$M" get features.metering)"; [ "$out" = "none" ] && ok "features.metering bogus → none" || bad "bogus metering: $out"

@@ -38,21 +38,62 @@ def defaults() -> dict:
         return json.load(fh)
 
 
-def main_checkout(cwd: str):
-    """Absolute path of the main checkout for cwd, or None outside a repo."""
+def _git_paths(cwd: str):
+    """(git_dir, common_dir, toplevel) as absolute paths, or None outside a repo."""
     try:
         out = subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            ["git", "-C", cwd, "rev-parse", "--path-format=absolute",
+             "--git-dir", "--git-common-dir", "--show-toplevel"],
             capture_output=True, text=True, check=False, timeout=5,
         )
     except (OSError, subprocess.SubprocessError):
         return None
     if out.returncode != 0:
         return None
-    common = out.stdout.strip()
-    if not common:
+    lines = out.stdout.splitlines()
+    if len(lines) < 2 or not lines[0] or not lines[1]:
         return None
-    return os.path.dirname(common)
+    toplevel = lines[2] if len(lines) > 2 and lines[2] else None
+    return lines[0], lines[1], toplevel
+
+
+def _inside_or_equal(path: str, parent: str) -> bool:
+    real_path, real_parent = os.path.realpath(path), os.path.realpath(parent)
+    return real_path == real_parent or os.path.commonpath([real_path, real_parent]) == real_parent
+
+
+def main_checkout(cwd: str):
+    """Parent of the git common dir for cwd, or None outside a repo. Untrusted:
+    a worker can repoint its worktree's commondir. Use trusted_root for config."""
+    paths = _git_paths(cwd)
+    return os.path.dirname(paths[1]) if paths else None
+
+
+def trusted_root(cwd: str):
+    """The main checkout whose config may govern cwd, or None.
+
+    In the main checkout (git dir equals common dir) that is the toplevel.
+    In a linked worktree the candidate is the parent of the common dir, and it
+    is rejected when it is the worktree itself or anything inside it, or when
+    the worktree's admin dir does not live under <common>/worktrees/. Those are
+    the cheap ways a worker can feed the hook a config it controls. A worker
+    that writes elsewhere through Bash is the documented tripwire limit.
+    """
+    paths = _git_paths(cwd)
+    if not paths:
+        return None
+    git_dir, common, toplevel = paths
+    if os.path.realpath(git_dir) == os.path.realpath(common):
+        return toplevel or os.path.dirname(common)
+    root = os.path.dirname(common)
+    if toplevel and _inside_or_equal(root, toplevel):
+        return None
+    if os.path.basename(common) != ".git" or not os.path.isdir(common):
+        return None
+    worktrees_dir = os.path.join(os.path.realpath(common), "worktrees")
+    if not _inside_or_equal(git_dir, worktrees_dir) or os.path.realpath(git_dir) == worktrees_dir:
+        return None
+    return root
 
 
 def config_path(root: str) -> str:
@@ -131,7 +172,7 @@ def _onoff(value) -> str:
 
 def status_line(cfg, cwd: str) -> str:
     base = defaults()
-    root = main_checkout(cwd)
+    root = trusted_root(cwd)
     path = config_path(root) if (root and cfg is not None) else "none"
     eff = cfg if isinstance(cfg, dict) else base
     platform = eff.get("platform", {}) if isinstance(eff.get("platform"), dict) else {}
@@ -223,11 +264,11 @@ def cli(argv) -> int:
     cmd = argv[0]
     cwd = os.getcwd()
     if cmd == "status":
-        print(status_line(load_config(main_checkout(cwd)), cwd))
+        print(status_line(load_config(trusted_root(cwd)), cwd))
         return 0
     if cmd == "get" and len(argv) == 2:
         key = argv[1]
-        cfg = load_config(main_checkout(cwd))
+        cfg = load_config(trusted_root(cwd))
         if key.startswith("features."):
             value = feature(cfg, key[len("features."):])
             if value is None:

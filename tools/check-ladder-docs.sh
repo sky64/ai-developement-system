@@ -48,6 +48,7 @@ need docs/05-delegation.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
 need docs/05-delegation.md "no Claude Code skills or hooks"
 
 need AGENTS.md "complexity rung"
+need AGENTS.md "one allowance of two per task"
 
 need skills/orchestrator/SKILL.md "Rung:"
 need skills/orchestrator/SKILL.md "--model"

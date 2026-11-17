@@ -83,12 +83,20 @@ fi
 # 3. Orca registration and base ref
 if timeout 20 "$orca_bin" repo show --repo "path:$repo" --json >/dev/null 2>&1; then
   echo "orca: repo already registered"
+elif timeout 30 "$orca_bin" repo add --path "$repo" --json >/dev/null 2>&1; then
+  echo "orca: repo registered"
 else
-  timeout 30 "$orca_bin" repo add --path "$repo" --json >/dev/null && echo "orca: repo registered"
+  echo "harness-enable: orca registration failed (command: $orca_bin; is Orca running and is this the right executable?). The three files are written and staged; nothing was committed." >&2
+  exit 1
 fi
 default_ref="$(git -C "$repo" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true)"
 if [ -n "$default_ref" ]; then
-  timeout 20 "$orca_bin" repo set-base-ref --repo "path:$repo" --ref "$default_ref" --json >/dev/null && echo "orca: base ref set to $default_ref"
+  if timeout 20 "$orca_bin" repo set-base-ref --repo "path:$repo" --ref "$default_ref" --json >/dev/null 2>&1; then
+    echo "orca: base ref set to $default_ref"
+  else
+    echo "harness-enable: orca set-base-ref failed for $default_ref" >&2
+    exit 1
+  fi
 else
   echo "orca: no origin/HEAD; base ref left at Orca's default"
 fi
@@ -97,8 +105,14 @@ fi
 files=(.claude/settings.json .claude/ai-dev-system.json CLAUDE.md)
 git -C "$repo" add "${files[@]}"
 if [ "$commit" = 1 ]; then
-  if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then echo "commit: nothing to commit"
-  else ORCHESTRATOR_GUARD=off git -C "$repo" commit -q -m "chore: enable ai-dev-system plugin" -- "${files[@]}" && echo "commit: $(git -C "$repo" rev-parse --short HEAD) chore: enable ai-dev-system plugin"; fi
+  if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
+    echo "commit: nothing to commit"
+  elif ORCHESTRATOR_GUARD=off git -C "$repo" commit -q -m "chore: enable ai-dev-system plugin" -- "${files[@]}"; then
+    echo "commit: $(git -C "$repo" rev-parse --short HEAD) chore: enable ai-dev-system plugin"
+  else
+    echo "harness-enable: commit failed (a hook or git refused it); the files remain staged" >&2
+    exit 1
+  fi
 else
   echo "commit: skipped (--no-commit); files are staged"
 fi
