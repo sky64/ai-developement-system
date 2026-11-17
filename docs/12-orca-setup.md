@@ -38,3 +38,17 @@ Recorded when `tools/bot/install-bot-identity.sh` was run on this machine; see t
 3. With a clean review, the implementer pushes and opens the pull request as the bot with `gh-bot`.
 4. The owner approves the pull request. Branch protection on `main` requires that approval and the bot cannot give it.
 5. The orchestrator merges as the bot with `gh-bot pr merge`, reports to the owner, updates the Orca workspace comment, and records the merge SHA and time on the pull request, per the [standing authorization](decisions/2026-10-25-agent-merge-and-deploy.md).
+
+## Model ladder routing
+
+Rows for the ladder in [docs/05](05-delegation.md), "Model ladder" and "Ladder review" ([decision 0004](decisions/0004-model-ladder.md)). A row is verified only when the command was run and its output recorded here; "unverified" rows name the owner item that blocks them. Checked 2026-11-17 on the local Orca 1.4.255 host unless stated.
+
+| Row | What was run | Result |
+|---|---|---|
+| Orca passes a model and effort to Claude and Codex workers | `orca orchestration worker-start --help` | Verified: `--model <id>` "Provider model id for a new agent launch", `--effort <level>` "Reasoning effort for the selected model". Help text states `dsh` and other agents "launch with the model from their own config". |
+| `dsh` is a registered Orca agent on the home-office host | `orca worktree ps --environment home-office-omarchy --json` | Verified: six panes with `"agentType": "dsh-tui"` listed; `dsh` 0.2.2-rc.1 installed locally. The DeepSeek row applies on that host. |
+| `dsh` profiles carry the Solvela base URL, and a cheapest-rung profile exists by name | profile dump on the home-office host | Unverified: `dsh tui --dump-config` on this host prints no profile because none is configured here. Needs the owner to name the two profiles (standard and cheapest) on the home-office host. |
+| Codex honours a `model_providers` base URL at Solvela with a bearer key | `codex --help` shows `-c, --config <key=value>` overrides for `~/.codex/config.toml` | Unverified end to end: needs the Solvela org API key for the reviewer team (owner item). |
+| Claude Code carries `x-solvela-session` for a Claude session routed through Solvela | not run | Unverified and not scheduled: the owner has not moved any Claude session off the subscription (decision 0004, Owner items). |
+| One Solvela team per role with hourly and daily budgets | not run | Unverified: needs the Solvela org, teams and budget figures (owner item). |
+| Solvela team stats `by_model` return rows for a test session | not run | Unverified: needs the teams above and one test dispatch with `x-solvela-session` set. Solvela source confirms `spend_logs.session_id` (migration 003) and the `by_model` breakdown in the team stats route. |
