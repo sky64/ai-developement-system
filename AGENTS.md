@@ -34,6 +34,7 @@ There is no application build or package dependency installation at present.
 - Run `bash -n` for shell scripts under tools/ and `python3 -m py_compile tools/hooks/orchestrator-guard.py` when they change.
 - Run `bash tools/hooks/test-orchestrator-guard.sh`.
 - Run `claude plugin validate .` when plugin files change.
+- Run `bash tools/check-ladder-docs.sh` when the ladder, templates or the orchestrator skill change.
 - Check changed Markdown links and code fences.
 - Test behavior when adding executable functionality. CLI help, file presence, and login status are not an end-to-end agent test.
 
