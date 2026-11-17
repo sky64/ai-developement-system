@@ -87,6 +87,14 @@ for badd in "$HOME/cleanalias" "$HOME/loop1" "$HOME/loop1/child" "$HOME/loop1/..
   [ "$rc" = 2 ] || bad "resolved-path problem accepted (rc=$rc): $badd"
 done
 [ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "alias to a newline-named target and a symlink loop are refused after resolution, nothing written" || bad "config or keys changed by a refused resolved path"
+# Codex cycle 7: the older-Python fallback resolver must behave the same. AIDEV_FORCE_REALPATH_FALLBACK=1 selects it.
+for badd in "$HOME/loop1/child" "$HOME/loop1/../future"; do
+  AIDEV_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
+  [ "$rc" = 2 ] || bad "fallback resolver accepted a loop (rc=$rc): $badd"
+done
+[ "$before" = "$(cat "$GC")" ] && ok "fallback resolver refuses ancestor loops, nothing written" || bad "fallback resolver changed the config"
+AIDEV_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/link/../projects2" >/dev/null 2>&1
+grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/projects2/' "$GC" && ok "fallback resolver follows the link before collapsing .." || bad "fallback link/..: $(grep includeIf "$GC" | tr '\n' ' ')"
 # Codex cycle 3: a trailing newline survives Bash's \$(...) stripping only if validated on the raw argument.
 k0="$(git config --global --get aidev.bot.tokenCommand)"; before="$(cat "$GC")"
 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$HOME/code"$'\n' >/dev/null 2>&1; rc=$?

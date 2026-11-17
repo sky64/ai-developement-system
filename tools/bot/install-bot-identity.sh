@@ -65,17 +65,25 @@ raw = sys.argv[1]
 def resolve(path):
     """Real path with missing components allowed; raise OSError on a symlink loop anywhere."""
     allow_missing = getattr(os.path, "ALLOW_MISSING", None)
+    if os.environ.get("AIDEV_FORCE_REALPATH_FALLBACK") == "1":  # tests exercise the older-Python branch
+        allow_missing = None
     if allow_missing is not None:
         return os.path.realpath(path, strict=allow_missing)
-    # Older Python: resolve each ancestor and refuse any that stays a link (a loop).
-    parts = os.path.normpath(path).split(os.sep)
+    # Older Python: walk the RAW absolute path component by component, resolving
+    # symlinks as they appear (never normpath first, which would collapse ".."
+    # before the link it follows), and refuse any component that stays a link.
     prefix = os.sep
-    for part in parts:
-        if not part:
+    for part in path.split(os.sep):
+        if part in ("", "."):
             continue
-        prefix = os.path.realpath(os.path.join(prefix, part))
-        if os.path.islink(prefix):
+        if part == "..":
+            prefix = os.path.dirname(prefix) or os.sep
+            continue
+        candidate = os.path.join(prefix, part)
+        resolved = os.path.realpath(candidate)
+        if os.path.islink(resolved):
             raise OSError("symlink loop")
+        prefix = resolved
     return prefix
 try:
     real = resolve(raw)
