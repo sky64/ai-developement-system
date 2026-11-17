@@ -48,12 +48,26 @@ need skills/orchestrator/SKILL.md "Risky is always rung 2"
 need skills/orchestrator/SKILL.md "After two escalations"
 need skills/orchestrator/SKILL.md "At rung 2, an escalation re-dispatches at rung 2"
 need skills/orchestrator/SKILL.md "model parameter of the Agent tool"
-need skills/orchestrator/SKILL.md "DeepSeek row where docs/12 records it, otherwise the Claude row"
+need skills/orchestrator/SKILL.md "DeepSeek row where platform.hosts has an entry for the current host, otherwise the Claude row"
 need skills/orchestrator/SKILL.md '${CLAUDE_PLUGIN_ROOT}/docs/12-orca-setup.md'
 need skills/orchestrator/SKILL.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
 need skills/orchestrator/SKILL.md "--model gpt-6.1-sol --effort"
 need skills/orchestrator/SKILL.md "--model claude-sonnet-5-5"
 need skills/orchestrator/SKILL.md "role attribution through the team API key"
+# Decision 0005: configuration, switches, platform seam
+need skills/orchestrator/SKILL.md "## Configuration"
+need skills/orchestrator/SKILL.md 'aidev_config.py" status'
+need skills/orchestrator/SKILL.md "AI_DEV_SYSTEM_FEATURE_"
+need skills/orchestrator/SKILL.md "model_ladder"
+need skills/orchestrator/SKILL.md "When model_ladder is off"
+need skills/orchestrator/SKILL.md "When metering is none"
+need skills/orchestrator/SKILL.md "When bot_identity is off"
+need skills/orchestrator/SKILL.md "## Platform seam"
+need skills/orchestrator/SKILL.md "create an isolated workspace"
+need skills/orchestrator/SKILL.md "hand a diff to a reviewer"
+need skills/orchestrator/SKILL.md "platform.hosts"
+need skills/orchestrator/SKILL.md "gateway.kind"
+need skills/orchestrator/SKILL.md "config/ai-dev-system.defaults.json"
 
 need docs/templates/plan.md "| Vendor |"
 
