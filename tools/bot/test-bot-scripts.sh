@@ -9,7 +9,8 @@ DEFAULTS="$ROOT/config/ai-dev-system.defaults.json"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME/.local/bin" "$TMP/bin"
 export XDG_CONFIG_HOME="$HOME/.config"
-export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"; : > "$GIT_CONFIG_GLOBAL"
+mkdir -p "$XDG_CONFIG_HOME/git"; export GIT_CONFIG_GLOBAL="$XDG_CONFIG_HOME/git/config"; : > "$GIT_CONFIG_GLOBAL"   # the file the install script writes its includeIf rules to
+git config --global user.name Owner; git config --global user.email owner@x
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "${GH_TOKEN:-no-token}"\n' > "$TMP/bin/gh"; chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
 R="$TMP/repo"; git init -q "$R" && git -C "$R" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
@@ -34,6 +35,27 @@ out2="$("$BOT/install-bot-identity.sh" --name B --email e@x --token-command "ech
 got="$(git config --global --get aidev.bot.tokenCommand)"
 [ "$got" = "echo tok-1" ] && ok "aidev.bot.tokenCommand in global git config" || bad "tokenCommand: '$got'"
 grep -q 'name = B' "$XDG_CONFIG_HOME/git/orca-bot.gitconfig" && ok "orca-bot.gitconfig takes user.name from --name" || bad "orca-bot.gitconfig user.name"
+
+# 2b. the include rules follow the projects directories that exist, not a hard-coded ~/Projects
+GC="$XDG_CONFIG_HOME/git/config"
+rules() { grep -c '^\[includeIf "gitdir:' "$GC"; }
+# no projects dir at all in this HOME → only the orca workspaces rule
+[ "$(rules)" = 1 ] && grep -qF 'gitdir:~/orca/workspaces/' "$GC" && ! grep -qF 'Projects' "$GC" && ok "no projects dir → only the orca/workspaces rule, no ~/Projects" || bad "rules without projects dir: $(grep includeIf "$GC" | tr '\n' ' ')"
+# lowercase ~/projects exists → rule for it; re-run replaces the block (no duplicates)
+mkdir -p "$HOME/projects"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
+[ "$(rules)" = 2 ] && grep -qF 'gitdir:~/projects/*/.git/worktrees/' "$GC" && [ "$(grep -c 'orca-bot identity' "$GC")" = 1 ] && ok "~/projects detected → its rule added, block replaced not duplicated" || bad "rules with ~/projects: $(grep -E 'includeIf|identity' "$GC" | tr '\n' ' ')"
+# both spellings exist → both rules
+mkdir -p "$HOME/Projects"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
+[ "$(rules)" = 3 ] && grep -qF 'gitdir:~/Projects/*/.git/worktrees/' "$GC" && ok "both ~/projects and ~/Projects → both rules" || bad "rules with both: $(grep includeIf "$GC" | tr '\n' ' ')"
+# explicit --projects-dir replaces detection
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/code" >/dev/null 2>&1
+[ "$(rules)" = 2 ] && grep -qF 'gitdir:~/code/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/projects/' "$GC" && ok "--projects-dir replaces detection" || bad "rules with --projects-dir: $(grep includeIf "$GC" | tr '\n' ' ')"
+# a linked worktree under the configured dir gets the bot identity
+mkdir -p "$HOME/code"; git init -q "$HOME/code/r" && git -C "$HOME/code/r" -c user.name=t -c user.email=t@x commit -q --allow-empty -m i && git -C "$HOME/code/r" worktree add -q "$HOME/code/r-wt" -b wt
+[ "$(git -C "$HOME/code/r-wt" config user.name)" = "B" ] && [ "$(git -C "$HOME/code/r" config user.name)" != "B" ] && ok "worktree under --projects-dir commits as the bot, main checkout does not" || bad "identity: wt=$(git -C "$HOME/code/r-wt" config user.name) main=$(git -C "$HOME/code/r" config user.name)"
+rmdir "$HOME/Projects"; "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1   # restore detection for the tests below
 
 # 3. keys set, switch on → gh runs with the token
 out="$(cd "$R" && "$BOT/gh-bot" x 2>/dev/null)"; rc=$?
