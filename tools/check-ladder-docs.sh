@@ -26,6 +26,15 @@ need docs/05-delegation.md "only through a new decision record"
 need docs/05-delegation.md "docs/12-orca-setup.md records a working dsh"
 need docs/05-delegation.md "## Plans and owner items"
 need docs/05-delegation.md "## Ladder review"
+# Final-review pins (2026-11-17)
+need docs/05-delegation.md "gpt-6.1-sol"
+need docs/05-delegation.md "reported to the owner and corrected by a decision record"
+need docs/05-delegation.md "At rung 2, an escalation re-dispatches at rung 2"
+need docs/05-delegation.md "one allowance of two per task"
+need docs/05-delegation.md "DeepSeek row where docs/12-orca-setup.md records it, otherwise the Claude row"
+need docs/05-delegation.md "except a budget or provider error"
+need docs/05-delegation.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
+need docs/05-delegation.md "no Claude Code skills or hooks"
 
 need AGENTS.md "complexity rung"
 
@@ -35,6 +44,21 @@ need skills/orchestrator/SKILL.md "x-solvela-session"
 need skills/orchestrator/SKILL.md "rung 1"
 need skills/orchestrator/SKILL.md "one rung higher"
 need skills/orchestrator/SKILL.md "budget"
+need skills/orchestrator/SKILL.md "Risky is always rung 2"
+need skills/orchestrator/SKILL.md "After two escalations"
+need skills/orchestrator/SKILL.md "At rung 2, an escalation re-dispatches at rung 2"
+need skills/orchestrator/SKILL.md "model parameter of the Agent tool"
+need skills/orchestrator/SKILL.md "DeepSeek row where docs/12 records it, otherwise the Claude row"
+need skills/orchestrator/SKILL.md '${CLAUDE_PLUGIN_ROOT}/docs/12-orca-setup.md'
+need skills/orchestrator/SKILL.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
+need skills/orchestrator/SKILL.md "--model gpt-6.1-sol --effort"
+need skills/orchestrator/SKILL.md "--model claude-sonnet-5-5"
+need skills/orchestrator/SKILL.md "role attribution through the team API key"
+
+need docs/templates/plan.md "| Vendor |"
+
+need docs/12-orca-setup.md "## Model ladder routing"
+need docs/12-orca-setup.md "applies once the profile row below is verified"
 
 need agents/specialist-agent.md.tmpl "Rung:"
 need agents/specialist-agent.md.tmpl "budget"

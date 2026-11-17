@@ -44,24 +44,25 @@ Rules:
 - The risky tier is always rung 2, whatever the complexity. Nothing else couples the two axes.
 - The orchestrator's read-only native subagents run at rung 1 by default, and at rung 2 only when the question being researched is itself risky-tier. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
 
-The ladder table. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is corrected in the plan with a note here.
+The ladder table. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
 
 | Role | Rung 0 | Rung 1 | Rung 2 |
 |---|---|---|---|
 | Orchestrator session | not applicable | not applicable | top Claude model (`claude-opus-5-5`) |
-| Research and read-only subagents (native, inside the orchestrator) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
+| Research and read-only subagents (native, inside the orchestrator; set with the Agent tool's `model` parameter) | `claude-haiku-5-5` (`haiku`) | `claude-sonnet-5-5` (`sonnet`) | `claude-opus-5-5` (`opus`) |
 | Implementer, Claude worker (Orca `--model`) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
 | Implementer, DeepSeek worker (`dsh` profile named in the brief) | cheapest `dsh` profile | standard `dsh` profile (`deepseek-v4-pro` today) | not used; rung 2 implementation goes to the Claude row |
-| Reviewer, Codex worker (Orca `--model <codex default> --effort`) | no reviewer at trivial tier; otherwise `--effort low` | `--effort medium` | `--effort high` |
+| Reviewer, Codex worker (Orca `--model gpt-6.1-sol --effort`; no Claude Code skills or hooks) | no reviewer at trivial tier; otherwise `--effort low` | `--effort medium` | `--effort high` |
 
+- At rungs 0 and 1 the implementer is the DeepSeek row where docs/12-orca-setup.md records it, otherwise the Claude row. A plan's Vendor column records which; an unplanned task follows the same rule.
 - The DeepSeek row applies only on a host where docs/12-orca-setup.md records a working dsh agent and its profiles. Elsewhere, rung 0 and 1 implementation goes to the Claude row. Registering `dsh` on a new host is machine setup, recorded in docs/12, not a ladder change.
 - Calls routed through Solvela name the model explicitly, with a Solvela alias (`haiku`, `sonnet`, `opus`, `deepseek`) or an exact provider id. Solvela's `auto` profile and routing profiles are not used as the chooser; see decision 0004, option 2.
 - Orca passes `--model` and `--effort` for Claude and Codex workers. The `dsh` agent takes its model from its own profile, so a DeepSeek rung is a profile selected by name in the brief.
 
 Escalation climbs and never descends:
 
-- A task is re-dispatched one rung higher, with a summary of the failed attempt in the brief, when the worker HALTs on a stop condition in its brief, when verification fails on the worker's own report, or when the reviewer records a correctness finding (not style or wording).
-- There are at most two escalations per task, matching the two-retry allowance in AGENTS.md. After that the orchestrator reports to the owner.
+- A task is re-dispatched one rung higher, with a summary of the failed attempt in the brief, when the worker HALTs on a stop condition in its brief (except a budget or provider error, see Ladder review), when verification fails on the worker's own report, or when the reviewer records a correctness finding (not style or wording). At rung 2, an escalation re-dispatches at rung 2 with a fresh worker.
+- There are at most two escalations per task. Escalations, reviewer correction cycles and retries of a failed operation draw on one allowance of two per task, the allowance AGENTS.md already sets. When it is spent the orchestrator reports to the owner.
 - A task is never moved down a rung once started, and a reviewer finding never lowers the rung of the fix.
 
 Tooling is rung-invariant. The Tooling table from the `plan-tooling` skill is filled before rungs are assigned and is identical at every rung. Every worker brief carries the same skill list for the task whatever its rung. Where a vendor cannot load a tool at all (Codex workers do not run Claude Code hooks or skills) the limit is recorded against the vendor in this table, and the planner picks a vendor that can.
@@ -154,9 +155,9 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 Solvela, the owner's gateway, is the meter for the ladder (decision 0004, section 6).
 
 - Which sessions route through Solvela: pay-per-token workers, which today means DeepSeek workers (already there), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on the owner's subscription. Claude Code sessions on the subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered USDC spend.
-- Attribution: every worker launched through Solvela sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. Solvela's `spend_logs` then hold model, provider, tokens and USDC cost per task with no bookkeeping by any agent.
+- Attribution: every worker launched through Solvela sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. Solvela's `spend_logs` then hold model, provider, tokens and USDC cost per task with no bookkeeping by any agent. Until docs/12 records a verified way to carry that header at launch, attribution is by role through the team API key, and per-task numbers come from the worker's report.
 - Ceilings: one Solvela team per role (implementer, reviewer, research) with hourly and daily budgets. A budget hit is a HALT for the worker and an escalation to the owner, never a retry into the same ceiling.
-- Direct sessions: the worker's reported token count goes into the PR body for normal and risky tasks, and into a `Rung:` trailer on the commit message for trivial tasks (the implementer writes the commit, so the trailer is in its brief). Orca workspace comments are not a ledger; they are overwritten.
+- Direct sessions: the brief tells the implementer to write `Rung: <n>; Model: <id>; Tokens: <in>/<out>` as a trailer on the commit message for trivial tasks, and in the PR body for normal and risky tasks. Orca workspace comments are not a ledger; they are overwritten.
 
 The review runs after the first ten normal-tier tasks under the ladder, then monthly. One rung-1 worker is briefed to read, for the period: Solvela team stats (`by_model` for each role team, which gives spend per role and rung because the ladder maps rung to model within a role), the PR bodies and `Rung:` trailers of direct sessions, and the orchestrator's completion reports for escalation counts. It produces spend per role and rung, escalation rate per rung, and cache hit rate, and ends with either "no change" or a draft decision record proposing a ladder change. Only an accepted decision record changes the table.
 
