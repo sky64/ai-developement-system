@@ -26,7 +26,11 @@ checkout's .claude/ai-dev-system.json, or AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUA
 in the environment (ORCHESTRATOR_GUARD=off is the older alias). The env
 override wins over the file. A missing, unreadable or wrong-version config
 means the guard stays on. A worktree's own copy of the file is never read,
-so a worker cannot switch the guard off for itself. These overrides are a
+and a config root that resolves to a path inside the hook's cwd (a repo a
+worker planted and pointed commondir at) is ignored, so a worker cannot
+switch the guard off for itself. A worker that writes to the main checkout's
+file through Bash can still do so: that is the documented tripwire limit
+(docs/05, Enforcement), not something this hook can close. These overrides are a
 convention, not a boundary, and so is the Bash check below. The Bash check
 is pattern based and bypassable; it is a tripwire, not a security boundary.
 
@@ -374,6 +378,15 @@ def decide(payload) -> int:
     return deny(f"main checkout, {reason}")
 
 
+def _strictly_inside(path: str, parent: str) -> bool:
+    """True when path is under parent and not parent itself (real paths)."""
+    real_path = os.path.realpath(path)
+    real_parent = os.path.realpath(parent)
+    if real_path == real_parent:
+        return False
+    return os.path.commonpath([real_path, real_parent]) == real_parent
+
+
 def guard_switched_off(payload) -> bool:
     """True when the switch is off by env or by the main checkout's config.
 
@@ -389,6 +402,11 @@ def guard_switched_off(payload) -> bool:
     cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
     try:
         root = aidev_config.main_checkout(cwd)
+        if root and _strictly_inside(root, cwd):
+            # A worker can repoint its worktree's commondir at a repo it planted
+            # inside the worktree. The real main checkout is never inside a
+            # worktree, so such a root is ignored and only the env applies.
+            root = None
         cfg = aidev_config.load_config(root)
         if aidev_config.feature(cfg, "orchestrator_guard") is False:
             from_env = aidev_config.feature(None, "orchestrator_guard") is False

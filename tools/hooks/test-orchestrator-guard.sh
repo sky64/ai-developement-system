@@ -217,6 +217,15 @@ runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
   | env ORCHESTRATOR_GUARD=off AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on python3 -I "$HOOK" 2>/dev/null; got=$?
 [ "$got" = 2 ] && echo "ok   exit 2  [legacy off + new on] new variable wins" || { echo "FAIL exit $got (want 2) legacy off + new on"; fail=1; }
+# A worktree whose commondir has been repointed at a repo INSIDE the worktree
+# (planted by a worker) must not be able to switch the guard off: a config root
+# that sits strictly inside the hook's cwd is ignored.
+cfg "$M" true
+git -C "$W" -c user.name=t -c user.email=t@x init -q planted 2>/dev/null; git -C "$W/planted" -c user.name=t -c user.email=t@x commit -q --allow-empty -m p
+cfg "$W/planted" false
+cp "$M/.git/worktrees/wt/commondir" "$TMP/commondir.bak"; printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # planted config inside cwd ignored
+cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted"
 # A hook that cannot import aidev_config must still deny (never crash open).
 mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
