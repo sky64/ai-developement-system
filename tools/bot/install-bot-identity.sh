@@ -56,11 +56,22 @@ for d in "${projects_dirs[@]}"; do
   esac
   case "$d" in /*) ;; *) d="$PWD/$d" ;; esac
   # Resolve symlinks before collapsing ".." (git matches gitdir against real
-  # paths), then normalise. The ~/ form is only safe when HOME is itself real.
-  d="$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$d")"
-  case "$d" in
-    *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' ') reject_dir "$d" ;;
-  esac
+  # paths), then validate the RESOLVED path inside Python before it crosses
+  # back into Bash, which would strip a trailing newline that the symlink
+  # target introduced. A symlink loop leaves an unresolved link and is refused.
+  if ! d="$(python3 -I - "$d" <<'PY'
+import os, re, sys
+raw = sys.argv[1]
+real = os.path.realpath(raw)
+if os.path.islink(real):
+    sys.stderr.write("install-bot-identity: --projects-dir '%s' resolves through a symlink loop; nothing was changed\n" % raw); sys.exit(2)
+if re.search(r'["\\*?\[\]\n\r]', real) or real != real.strip(" ") or real.endswith("/ "):
+    sys.stderr.write("install-bot-identity: --projects-dir '%s' resolves to '%s', which contains a character that cannot be written safely into a git includeIf pattern; nothing was changed\n" % (raw, real.encode("unicode_escape").decode())); sys.exit(2)
+sys.stdout.write(real)
+PY
+)"; then
+    exit 2
+  fi
   normalized+=("$d")
 done
 projects_dirs=("${normalized[@]}")

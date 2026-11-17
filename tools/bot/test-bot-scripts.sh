@@ -77,6 +77,15 @@ git init -q "$HOME/actual/r2" && git -C "$HOME/actual/r2" -c user.name=t -c user
 [ "$(git -C "$HOME/alias/r2-wt" config user.name)" = "B" ] && ok "worktree reached through the alias commits as the bot" || bad "alias worktree identity: $(git -C "$HOME/alias/r2-wt" config user.name)"
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/link/../projects2" >/dev/null 2>&1
 grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/projects2/' "$GC" && ok "symlink followed by .. resolves through the link target" || bad "link/..: $(grep includeIf "$GC" | tr '\n' ' ')"
+# Codex cycle 5: a clean alias whose TARGET ends in a newline (or a symlink loop) must be refused
+# after resolution, which means validating inside Python before the path crosses back into Bash.
+mkdir -p "$HOME/outer/bad"$'\n'; ln -sfn "$HOME/outer/bad"$'\n' "$HOME/cleanalias"; ln -sfn "$HOME/loop1" "$HOME/loop2"; ln -sfn "$HOME/loop2" "$HOME/loop1"
+before="$(cat "$GC")"; k0="$(git config --global --get aidev.bot.tokenCommand)"
+for badd in "$HOME/cleanalias" "$HOME/loop1"; do
+  "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
+  [ "$rc" = 2 ] || bad "resolved-path problem accepted (rc=$rc): $badd"
+done
+[ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "alias to a newline-named target and a symlink loop are refused after resolution, nothing written" || bad "config or keys changed by a refused resolved path"
 # Codex cycle 3: a trailing newline survives Bash's \$(...) stripping only if validated on the raw argument.
 k0="$(git config --global --get aidev.bot.tokenCommand)"; before="$(cat "$GC")"
 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$HOME/code"$'\n' >/dev/null 2>&1; rc=$?
