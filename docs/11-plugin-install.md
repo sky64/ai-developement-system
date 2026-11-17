@@ -59,7 +59,7 @@ The flag loads the directory for one session and writes nothing to settings. A l
 
 1. Register the application repository with Orca (`orca repo add --path <repo>`) and set its base ref (`orca repo set-base-ref --repo path:<repo> --ref origin/main`).
 2. Enable the plugin in the application repository's `.claude/settings.json` as above and add the orchestrator line to its `CLAUDE.md` (next section). Start the orchestrator session in the repository's main checkout from Orca.
-3. The orchestrator starts implementers and reviewers as Orca workers in their own worktrees, following `orca skills get orca-cli` and `orca skills get orchestration`. Agent worktrees commit and push as `Solvela-bot` through the machine-level identity include and credential helper installed by `tools/bot/install-bot-identity.sh` ([12-orca-setup.md](12-orca-setup.md)).
+3. The orchestrator starts implementers and reviewers as Orca workers in their own worktrees, following `orca skills get orca-cli` and `orca skills get orchestration`. Where `features.bot_identity` is on in `.claude/ai-dev-system.json`, agent worktrees commit and push as the agent identity installed in your global git config by `tools/bot/install-bot-identity.sh` (the owner's values are in [12-orca-setup.md](12-orca-setup.md)).
 4. Protect `main` in the application repository the way [09-agent-identity.md](09-agent-identity.md) describes for this repository (one approving review, admin enforcement, no force pushes).
 
 Orca launches the real Claude Code binary on this machine with the user's configuration, so a committed `extraKnownMarketplaces` entry is expected to apply once the folder is trusted. This is untested; see [Verification](#verification).

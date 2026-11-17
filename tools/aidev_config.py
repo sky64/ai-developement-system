@@ -74,6 +74,8 @@ def load_config(root):
 
 
 def _env_switch(name: str, env) -> object:
+    if name not in BOOL_FEATURES:
+        return None  # only boolean switches take an on/off override
     raw = env.get(ENV_PREFIX + name.upper())
     if raw is None and name == "orchestrator_guard":
         legacy = env.get("ORCHESTRATOR_GUARD")
@@ -98,7 +100,13 @@ def feature(cfg, name: str, env=None):
     if isinstance(cfg, dict):
         feats = cfg.get("features")
         if isinstance(feats, dict) and name in feats:
-            return feats[name]
+            value = feats[name]
+            # A value of the wrong type is a typo, not a switch: fall back to the
+            # default so the status line never reports what the hook will not enforce.
+            if name in BOOL_FEATURES and isinstance(value, bool):
+                return value
+            if name == "metering" and value in METERING_KINDS:
+                return value
     return defaults()["features"].get(name)
 
 

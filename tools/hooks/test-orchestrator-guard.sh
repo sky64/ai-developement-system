@@ -213,6 +213,15 @@ cfg "$M" false
 runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on  2 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env beats file
 rm -f "$M/.claude/ai-dev-system.json"
 runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env alone turns off
+# The new variable beats the legacy alias, in the hook as in aidev_config.
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | env ORCHESTRATOR_GUARD=off AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on python3 -I "$HOOK" 2>/dev/null; got=$?
+[ "$got" = 2 ] && echo "ok   exit 2  [legacy off + new on] new variable wins" || { echo "FAIL exit $got (want 2) legacy off + new on"; fail=1; }
+# A hook that cannot import aidev_config must still deny (never crash open).
+mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | ORCHESTRATOR_GUARD= python3 -I "$TMP/alone/hooks/orchestrator-guard.py" 2>/dev/null; got=$?
+[ "$got" = 2 ] && echo "ok   exit 2  hook without aidev_config denies" || { echo "FAIL exit $got (want 2) hook without aidev_config"; fail=1; }
 
 # root variable set the way Claude Code sets it, in the main checkout.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

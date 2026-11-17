@@ -14,8 +14,11 @@ M="$TMP/main"; W="$TMP/wt"
 fail=0
 ok()   { echo "ok   $1"; }
 bad()  { echo "FAIL $1"; fail=1; }
-cfg()  { python3 -I -c 'import json,sys; sys.stdout.write(open(sys.argv[1]).read())' "$DEFAULTS" > "$1/.claude/ai-dev-system.json" 2>/dev/null || { mkdir -p "$1/.claude"; cp "$DEFAULTS" "$1/.claude/ai-dev-system.json" 2>/dev/null; }; }
 run()  { (cd "$1" && shift && python3 -I "$MOD" "$@" 2>&1); }
+setfeat() { # <value-json> <feature> : write defaults with features.<feature> = value
+  mkdir -p "$M/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1])); d["features"][sys.argv[3]]=json.loads(sys.argv[2]); json.dump(d,open(sys.argv[4],"w"))' "$DEFAULTS" "$1" "$2" "$M/.claude/ai-dev-system.json"; }
 
 # 1. status without a config: defaults, config=none
 out="$(run "$M" status)"
@@ -60,5 +63,18 @@ case "$out" in *"models=deviates: models.research"*) ok "status reports models d
 # 10. the example config validates
 out="$(run "$M" check "$EXAMPLE")"; rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] && ok "check example → exit 0, silent" || bad "check example: rc=$rc out=$out"
+
+# 11. a non-boolean switch value falls back to the default (never reported as off)
+setfeat '"off"' orchestrator_guard
+out="$(run "$M" get features.orchestrator_guard)"; [ "$out" = "true" ] && ok 'features.orchestrator_guard "off" (string) → default true' || bad "string switch: $out"
+out="$(run "$M" status)"; case "$out" in *"guard=on"*) ok "status shows guard=on for a string switch value";; *) bad "status string switch: $out";; esac
+setfeat '0' model_ladder
+out="$(run "$M" get features.model_ladder)"; [ "$out" = "true" ] && ok "features.model_ladder 0 → default true" || bad "numeric switch: $out"
+
+# 12. an unknown metering kind falls back to none; env overrides do not apply to metering
+setfeat '"bogus"' metering
+out="$(run "$M" get features.metering)"; [ "$out" = "none" ] && ok "features.metering bogus → none" || bad "bogus metering: $out"
+out="$(cd "$M" && AI_DEV_SYSTEM_FEATURE_METERING=off python3 -I "$MOD" status 2>&1)"
+case "$out" in *"metering=none"*) ok "env override ignored for metering";; *) bad "metering env: $out";; esac
 
 exit $fail

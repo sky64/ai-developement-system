@@ -97,6 +97,26 @@ need docs/templates/plan.md "## Tooling"
 
 need skills/plan-tooling/SKILL.md "name: plan-tooling"
 
+# Decision 0005: the defaults file validates, and every model id it ships
+# appears in the docs/05 ladder table, so the table and the file cannot drift.
+if ! python3 -I tools/aidev_config.py check config/ai-dev-system.defaults.json >/dev/null 2>&1; then
+  echo "config/ai-dev-system.defaults.json: fails aidev_config.py check"; missing=$((missing + 1))
+fi
+for id in $(python3 -I -c '
+import json; d=json.load(open("config/ai-dev-system.defaults.json"))["models"]
+ids=set(d["research"])|set(d["claude_implementer"])|{d["codex_reviewer"]["model"]}
+print(" ".join(sorted(ids)))' 2>/dev/null); do
+  need docs/05-delegation.md "$id"
+done
+# No owner-specific identity in stranger-facing docs.
+forbid() {
+  local file="$1" phrase="$2"
+  if grep -qF -- "$phrase" "$file" 2>/dev/null; then
+    printf '%s: must not contain %s\n' "$file" "$phrase"; missing=$((missing + 1))
+  fi
+}
+forbid docs/11-plugin-install.md "Solvela-bot"
+
 if [ "$missing" -ne 0 ]; then
   printf '%d required phrase(s) missing\n' "$missing"
   exit 1

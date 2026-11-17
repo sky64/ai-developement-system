@@ -43,6 +43,18 @@ R3="$TMP/r3"; newrepo "$R3"; printf '{"version": 2}' > "$TMP/bad.json"
 out="$(bash "$ENABLE" "$R3" --config "$TMP/bad.json" 2>&1)"; rc=$?
 [ "$rc" = 1 ] && [ ! -e "$R3/.claude/ai-dev-system.json" ] && [ ! -e "$R3/.claude/settings.json" ] && case "$out" in *check*) true;; *) false;; esac && ok "invalid --config exits 1 before writing" || bad "invalid config: rc=$rc out=$out"
 
+# 5b. a hand-formatted settings.json that already enables the plugin is left byte-identical
+R5="$TMP/r5"; newrepo "$R5"; mkdir -p "$R5/.claude"
+printf '{\n    "enabledPlugins": {\n        "ai-dev-system@ai-dev-system": true\n    },\n    "extraKnownMarketplaces": {\n        "ai-dev-system": {\n            "source": {\n                "source": "github",\n                "repo": "sky64/ai-developement-system"\n            }\n        }\n    }\n}\n' > "$R5/.claude/settings.json"
+s_before="$(sha256sum "$R5/.claude/settings.json")"
+bash "$ENABLE" "$R5" >/dev/null 2>&1
+[ "$(sha256sum "$R5/.claude/settings.json")" = "$s_before" ] && ok "settings.json untouched when nothing changes" || bad "settings.json reformatted on re-run"
+
+# 5c. unrelated staged changes are not swept into the enable commit
+R6="$TMP/r6"; newrepo "$R6"; echo x > "$R6/unrelated.txt"; git -C "$R6" add unrelated.txt
+bash "$ENABLE" "$R6" >/dev/null 2>&1
+git -C "$R6" diff --cached --name-only | grep -q '^unrelated.txt$' && ! git -C "$R6" show --name-only --format= HEAD | grep -q unrelated.txt && ok "enable commit leaves unrelated staged files staged" || bad "unrelated staged file was committed or lost"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

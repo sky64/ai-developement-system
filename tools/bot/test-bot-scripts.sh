@@ -51,4 +51,18 @@ err="$(cd "$R" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
 err="$(cd "$TMP" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
 [ "$rc" = 1 ] && case "$err" in *repository*) true;; *) false;; esac && ok "gh-bot refuses outside a repository" || bad "outside repo: rc=$rc err=$err"
 
+# 7. no config file at all → the switch defaults to off → refuse
+rm -f "$R/.claude/ai-dev-system.json"
+err="$(cd "$R" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
+[ "$rc" = 1 ] && case "$err" in *bot_identity*) true;; *) false;; esac && ok "gh-bot refuses when no config file exists" || bad "no config: rc=$rc err=$err"
+
+# 8. a repo-local aidev.bot.* value is ignored: only the global config is trusted
+switch true
+git -C "$R" config aidev.bot.tokenCommand 'echo INJECTED'
+git -C "$R" config aidev.bot.name 'Mallory'
+out="$(cd "$R" && "$BOT/gh-bot" x 2>/dev/null)"; rc=$?
+[ "$rc" = 0 ] && [ "$out" = "tok-1" ] && ok "repo-local tokenCommand is ignored (global wins)" || bad "repo-local override: rc=$rc out=$out"
+out="$(cd "$R" && printf 'host=github.com\n\n' | "$BOT/git-credential-op-bot" get 2>/dev/null)"
+case "$out" in *"username=B"*password=tok-1*) ok "repo-local name is ignored by the credential helper";; *) bad "helper with repo-local keys: '$out'";; esac
+
 exit $fail

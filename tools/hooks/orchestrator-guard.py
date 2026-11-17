@@ -40,7 +40,10 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import aidev_config  # noqa: E402  (tools/aidev_config.py, the single config reader)
+try:
+    import aidev_config  # tools/aidev_config.py, the single config reader
+except Exception:  # a broken or partial plugin install must not crash the guard open
+    aidev_config = None
 
 WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -376,13 +379,20 @@ def guard_switched_off(payload) -> bool:
 
     Any failure to read the config counts as "on": the guard fails closed.
     """
+    if aidev_config is None:
+        # Reader unavailable: only the legacy human override applies; the file is not read.
+        if os.environ.get("ORCHESTRATOR_GUARD", "").lower() == "off":
+            sys.stderr.write("orchestrator-guard: off by config (environment)\n")
+            return True
+        return False
     cwd = payload.get("cwd") if isinstance(payload, dict) else None
     cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
     try:
         root = aidev_config.main_checkout(cwd)
         cfg = aidev_config.load_config(root)
         if aidev_config.feature(cfg, "orchestrator_guard") is False:
-            source = aidev_config.config_path(root) if cfg is not None else "environment"
+            from_env = aidev_config.feature(None, "orchestrator_guard") is False
+            source = "environment" if from_env else aidev_config.config_path(root)
             sys.stderr.write(f"orchestrator-guard: off by config ({source})\n")
             return True
     except Exception:  # unreadable config or git: stay on
@@ -391,8 +401,6 @@ def guard_switched_off(payload) -> bool:
 
 
 def main() -> int:
-    if os.environ.get("ORCHESTRATOR_GUARD", "").lower() == "off":
-        return 0
     try:
         payload = json.load(sys.stdin)
     except (ValueError, UnicodeDecodeError) as exc:

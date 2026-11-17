@@ -50,11 +50,15 @@ p = pathlib.Path(sys.argv[1])
 d = json.loads(p.read_text()) if p.exists() and p.read_text().strip() else {}
 if not isinstance(d, dict):
     sys.exit("settings.json is not a JSON object")
+before = json.dumps(d, sort_keys=True)
 d.setdefault("extraKnownMarketplaces", {})["ai-dev-system"] = {
     "source": {"source": "github", "repo": "sky64/ai-developement-system"}}
 d.setdefault("enabledPlugins", {})["ai-dev-system@ai-dev-system"] = True
-p.write_text(json.dumps(d, indent=2) + "\n")
-print("settings: plugin enabled in .claude/settings.json")
+if json.dumps(d, sort_keys=True) == before:
+    print("settings: plugin already enabled in .claude/settings.json, left unchanged")
+else:
+    p.write_text(json.dumps(d, indent=2) + "\n")
+    print("settings: plugin enabled in .claude/settings.json")
 PY
 
 # 1b. per-repo config (decision 0005)
@@ -90,10 +94,11 @@ else
 fi
 
 # 4. Commit
-git -C "$repo" add .claude/settings.json .claude/ai-dev-system.json CLAUDE.md
+files=(.claude/settings.json .claude/ai-dev-system.json CLAUDE.md)
+git -C "$repo" add "${files[@]}"
 if [ "$commit" = 1 ]; then
-  if git -C "$repo" diff --cached --quiet; then echo "commit: nothing to commit"
-  else ORCHESTRATOR_GUARD=off git -C "$repo" commit -q -m "chore: enable ai-dev-system plugin" && echo "commit: $(git -C "$repo" rev-parse --short HEAD) chore: enable ai-dev-system plugin"; fi
+  if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then echo "commit: nothing to commit"
+  else ORCHESTRATOR_GUARD=off git -C "$repo" commit -q -m "chore: enable ai-dev-system plugin" -- "${files[@]}" && echo "commit: $(git -C "$repo" rev-parse --short HEAD) chore: enable ai-dev-system plugin"; fi
 else
   echo "commit: skipped (--no-commit); files are staged"
 fi
