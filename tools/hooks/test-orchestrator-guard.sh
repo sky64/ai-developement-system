@@ -183,6 +183,37 @@ raw 2 "Bash with null command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_in
 raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":[\"ls\"]}}"
 
 # Plugin wiring: run the exact command from hooks/hooks.json, with the plugin
+# Decision 0005: features.orchestrator_guard in .claude/ai-dev-system.json,
+# read from the MAIN checkout, with env overrides. cfg <dir> <true|false>
+# writes the shipped defaults with the guard switch set.
+DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/config/ai-dev-system.defaults.json"
+cfg() { mkdir -p "$1/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=(sys.argv[3]=="true")
+json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$1/.claude/ai-dev-system.json" "$2"; }
+runenv() { # VAR=value expected_exit cwd tool json_input
+  local envpair="$1" exp="$2" cwd="$3" tool="$4" input="$5"
+  printf '{"tool_name":"%s","cwd":"%s","tool_input":%s}' "$tool" "$cwd" "$input" \
+    | env ORCHESTRATOR_GUARD= "$envpair" python3 -I "$HOOK" 2>/dev/null; local got=$?
+  if [ "$got" = "$exp" ]; then echo "ok   exit $got  [$envpair] $tool $(echo "$input" | cut -c1-50)"
+  else echo "FAIL exit $got (want $exp)  [$envpair] cwd=$cwd $tool $input"; fail=1; fi
+}
+cfg "$M" false
+run 0 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # off by config allows
+err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>&1 >/dev/null)"
+case "$err" in "orchestrator-guard: off by config"*) echo "ok   off-by-config prints its stderr line";; *) echo "FAIL off-by-config stderr: '$err'"; fail=1;; esac
+cfg "$M" true; cfg "$W" false
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # worktree copy ignored, main copy on
+rm -rf "$W/.claude"
+printf 'not json' > "$M/.claude/ai-dev-system.json"
+run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # malformed → guard on
+cfg "$M" false; sed -i 's/"version": 1/"version": 2/' "$M/.claude/ai-dev-system.json"
+run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # wrong version → guard on
+cfg "$M" false
+runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on  2 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env beats file
+rm -f "$M/.claude/ai-dev-system.json"
+runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env alone turns off
+
 # root variable set the way Claude Code sets it, in the main checkout.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PLUGIN_CMD="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["PreToolUse"][0]["hooks"][0]["command"])' "$ROOT/hooks/hooks.json")"

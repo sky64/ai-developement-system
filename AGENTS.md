@@ -34,6 +34,7 @@ There is no application build or package dependency installation at present.
 - Run `git diff --check` for changes.
 - Run `bash -n` for shell scripts under tools/ and `python3 -m py_compile tools/hooks/orchestrator-guard.py` when they change.
 - Run `bash tools/hooks/test-orchestrator-guard.sh`.
+- Run `bash tools/test-aidev-config.sh`, `bash tools/bot/test-bot-scripts.sh` and `bash tools/test-harness-enable.sh` when the config reader, the bot scripts or harness-enable change.
 - Run `claude plugin validate .` when plugin files change.
 - Run `bash tools/check-ladder-docs.sh` when the ladder, templates or the orchestrator skill change.
 - Check changed Markdown links and code fences.

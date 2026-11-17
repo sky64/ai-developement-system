@@ -21,8 +21,13 @@ token stream is split into simple commands on those operators. Command
 substitution, unterminated quotes and unknown operator runs are parse
 failures and deny.
 
-Set ORCHESTRATOR_GUARD=off to disable for a human session. That override is
-a convention, not a boundary, and so is the Bash check below. The Bash check
+Switching off (decision 0005): features.orchestrator_guard in the MAIN
+checkout's .claude/ai-dev-system.json, or AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off
+in the environment (ORCHESTRATOR_GUARD=off is the older alias). The env
+override wins over the file. A missing, unreadable or wrong-version config
+means the guard stays on. A worktree's own copy of the file is never read,
+so a worker cannot switch the guard off for itself. These overrides are a
+convention, not a boundary, and so is the Bash check below. The Bash check
 is pattern based and bypassable; it is a tripwire, not a security boundary.
 
 Exit 2 blocks the tool call and sends stderr back to the agent.
@@ -33,6 +38,9 @@ import re
 import shlex
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import aidev_config  # noqa: E402  (tools/aidev_config.py, the single config reader)
 
 WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -363,6 +371,25 @@ def decide(payload) -> int:
     return deny(f"main checkout, {reason}")
 
 
+def guard_switched_off(payload) -> bool:
+    """True when the switch is off by env or by the main checkout's config.
+
+    Any failure to read the config counts as "on": the guard fails closed.
+    """
+    cwd = payload.get("cwd") if isinstance(payload, dict) else None
+    cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
+    try:
+        root = aidev_config.main_checkout(cwd)
+        cfg = aidev_config.load_config(root)
+        if aidev_config.feature(cfg, "orchestrator_guard") is False:
+            source = aidev_config.config_path(root) if cfg is not None else "environment"
+            sys.stderr.write(f"orchestrator-guard: off by config ({source})\n")
+            return True
+    except Exception:  # unreadable config or git: stay on
+        return False
+    return False
+
+
 def main() -> int:
     if os.environ.get("ORCHESTRATOR_GUARD", "").lower() == "off":
         return 0
@@ -370,6 +397,8 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (ValueError, UnicodeDecodeError) as exc:
         return deny(f"invalid hook input: not JSON ({exc})")
+    if guard_switched_off(payload):
+        return 0
     try:
         return decide(payload)
     except Exception as exc:  # never crash open
