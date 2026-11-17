@@ -68,6 +68,15 @@ for badd in "$HOME/ba\"d" "$HOME/code[1]" "$HOME/co*de"; do
   [ "$rc" = 2 ] || bad "special-char dir accepted (rc=$rc): $badd"
 done
 [ "$before" = "$(cat "$GC")" ] && ok "quote, bracket and star in --projects-dir are refused and the config is untouched" || bad "config changed by a refused --projects-dir"
+# Codex cycle 4: symlinks resolve before the pattern is built, because git matches gitdir
+# against real paths. A plain alias and an alias followed by .. both map to the real directory.
+mkdir -p "$HOME/actual" "$HOME/outer/target" "$HOME/outer/projects2"; ln -sfn "$HOME/actual" "$HOME/alias"; ln -sfn "$HOME/outer/target" "$HOME/link"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/alias" >/dev/null 2>&1
+grep -qF 'gitdir:~/actual/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/alias/' "$GC" && ok "symlinked --projects-dir resolves to the real directory" || bad "alias: $(grep includeIf "$GC" | tr '\n' ' ')"
+git init -q "$HOME/actual/r2" && git -C "$HOME/actual/r2" -c user.name=t -c user.email=t@x commit -q --allow-empty -m i && git -C "$HOME/actual/r2" worktree add -q "$HOME/actual/r2-wt" -b wt
+[ "$(git -C "$HOME/alias/r2-wt" config user.name)" = "B" ] && ok "worktree reached through the alias commits as the bot" || bad "alias worktree identity: $(git -C "$HOME/alias/r2-wt" config user.name)"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/link/../projects2" >/dev/null 2>&1
+grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/projects2/' "$GC" && ok "symlink followed by .. resolves through the link target" || bad "link/..: $(grep includeIf "$GC" | tr '\n' ' ')"
 # Codex cycle 3: a trailing newline survives Bash's \$(...) stripping only if validated on the raw argument.
 k0="$(git config --global --get aidev.bot.tokenCommand)"; before="$(cat "$GC")"
 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$HOME/code"$'\n' >/dev/null 2>&1; rc=$?

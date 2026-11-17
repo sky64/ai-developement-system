@@ -55,7 +55,9 @@ for d in "${projects_dirs[@]}"; do
     *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' '|*'/ '*) reject_dir "$d" ;;
   esac
   case "$d" in /*) ;; *) d="$PWD/$d" ;; esac
-  d="$(python3 -I -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' "$d")"
+  # Resolve symlinks before collapsing ".." (git matches gitdir against real
+  # paths), then normalise. The ~/ form is only safe when HOME is itself real.
+  d="$(python3 -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$d")"
   case "$d" in
     *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' ') reject_dir "$d" ;;
   esac
@@ -67,12 +69,17 @@ here="$(cd "$(dirname "$0")" && pwd)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git"
 
 # Git's gitdir: patterns take ~/ for the home directory; absolute paths pass through.
+real_home="$(python3 -I -c 'import os; print(os.path.realpath(os.path.expanduser("~")))')"
 gitdir_pattern() {
-  case "$1" in
-    "$HOME") printf '~' ;;
-    "$HOME"/*) printf '~/%s' "${1#"$HOME"/}" ;;
-    *) printf '%s' "$1" ;;
-  esac
+  # Paths are real paths. Use the ~/ form only when HOME is not a symlink, so
+  # git's expansion of ~ lands on the same real path; otherwise keep it absolute.
+  if [ "$real_home" = "$HOME" ]; then
+    case "$1" in
+      "$HOME") printf '~'; return ;;
+      "$HOME"/*) printf '~/%s' "${1#"$HOME"/}"; return ;;
+    esac
+  fi
+  printf '%s' "$1"
 }
 begin="# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>"
 end="# <<< orca-bot identity <<<"
