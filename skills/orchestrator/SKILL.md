@@ -28,6 +28,19 @@ Then load the version-matched Orca guides: `orca skills get orca-cli` for handof
 - A worker does not necessarily see the plugin files at `${CLAUDE_PLUGIN_ROOT}`. Paste the role prompt text into the brief instead of pointing at the path.
 - Native subagents are allowed for read-only investigation only. Anything that writes runs as an Orca worker.
 - The orchestrator does not write or commit. The direct-edit exception in the plugin AGENTS.md applies only when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
-- Name the tier, base commit, files, acceptance criteria, and limits in every brief, as docs/05 requires.
+- Name the tier, base commit, files, acceptance criteria, and limits in every brief, as docs/05 requires. Name the rung and model too; see Rungs and models below.
 - Name the worker's role explicitly in the brief (for example "You are the implementer" or "You are the reviewer"), so the worker does not take the orchestrator role.
 - Update the Orca workspace comment at checkpoints: `orca worktree set --worktree active --comment "<status>" --json`.
+
+## Rungs and models
+
+The model ladder is in `${CLAUDE_PLUGIN_ROOT}/docs/05-delegation.md`, "Model ladder". Read that table before the first dispatch of a session; the rules below say how to apply it.
+
+- Every brief carries three lines beside the tier: `Tier: <trivial|normal|risky>`, `Rung: <0|1|2>`, `Model: <id or dsh profile name>`. A task from an approved plan takes its rung from the plan row. A task outside any plan takes its rung from its tier (trivial 0, normal 1, risky 2). Risky is always rung 2. Do not weigh complexity at dispatch; the rule decides.
+- Claude and Codex workers: pass `--model <id>` and, for Codex, `--effort <level>` from the ladder table to `orca orchestration worker-start` or `orca worktree create`. DeepSeek workers: Orca cannot set the model for `dsh`; name the `dsh` profile for the rung in the brief's `Model:` line, and use the DeepSeek row only on a host where docs/12-orca-setup.md records it.
+- Native read-only subagents run on the rung 1 model from the table, or the rung 2 model when the question is itself risky-tier. Name the model in the subagent prompt.
+- Workers routed through Solvela (pay-per-token vendors: DeepSeek, Codex, API-billed Claude) send `x-solvela-session: <Orca dispatch id>` on every request. Put the exact header name and value in the brief's environment line so the worker's client configuration carries it. Direct subscription sessions do not route through Solvela unless the owner has decided otherwise.
+- Escalation: when the worker HALTs on a brief stop condition, when verification fails on the worker's own report, or when the reviewer records a correctness finding, re-dispatch the task one rung higher with a summary of the failed attempt in the brief. After two escalations, stop and report to the owner. Never re-dispatch lower.
+- A Solvela or provider budget error reported by a worker is an escalation to the owner, not a retry. Do not re-dispatch into the same ceiling.
+- Plans: when the work has more than one task, dispatch a rung-2 Claude worker to write the plan from `${CLAUDE_PLUGIN_ROOT}/docs/templates/plan.md` with the `plan-tooling` skill; paste the template text into the brief. Wait for the owner's approval of the plan and its owner items, then dispatch its tasks without further approval.
+- The completion report for every task adds: rung used, number of escalations, tokens consumed as the worker reported them, and the model id actually used.
