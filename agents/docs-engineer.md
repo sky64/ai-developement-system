@@ -47,7 +47,7 @@ Tier: <trivial|normal|risky> · Rung: <0|1|2> · Model: <id as the brief names i
 - A claim you are asked to write cannot be verified from the repository or a
   command you can run.
 - A check fails for a reason outside your assigned files.
-- A provider or Solvela budget error. Report it; do not retry.
+- A provider or gateway budget error. Report it; do not retry.
 
 ## Report
 

@@ -18,7 +18,7 @@ Any agent that writes runs as an Orca worker so Orca can see, stop, and inspect 
 
 Adopted 2026-10-24, see [decision 0001](decisions/0001-tiered-protocol.md). The orchestrator names the tier in the worker brief. When in doubt, pick the higher tier. These are task tiers for process weight, not the action-approval tiers in the historical audit.
 
-Risk decides the tier, not size or file type. Any change to delegation policy, AGENTS.md, `.claude/settings.json`, hook scripts, or any other protection setting is risky, even a one-line edit. The examples below are illustrations and risk overrides them.
+Risk decides the tier, not size or file type. Any change to delegation policy, AGENTS.md, `.claude/settings.json`, `.claude/ai-dev-system.json` (the feature switches and install values, decision 0005), hook scripts, or any other protection setting is risky, even a one-line edit. The examples below are illustrations and risk overrides them.
 
 | Tier | Examples | Implementer | Reviewer | Record |
 |---|---|---|---|---|
@@ -44,7 +44,7 @@ Rules:
 - The risky tier is always rung 2, whatever the complexity. Nothing else couples the two axes.
 - The orchestrator's read-only native subagents run at rung 1 by default, and at rung 2 only when the question being researched is itself risky-tier. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
 
-The ladder table. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
+The ladder table. The ids below are the shipped defaults in `config/ai-dev-system.defaults.json`; a repository's `models` block in `.claude/ai-dev-system.json` may override them, and the orchestrator reports every deviation in its session status line. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
 
 | Role | Rung 0 | Rung 1 | Rung 2 |
 |---|---|---|---|
@@ -54,9 +54,9 @@ The ladder table. Model ids were taken from the installed CLIs on 2026-11-17; ea
 | Implementer, DeepSeek worker (`dsh` profile named in the brief) | cheapest `dsh` profile | standard `dsh` profile (`deepseek-v4-pro` today) | not used; rung 2 implementation goes to the Claude row |
 | Reviewer, Codex worker (Orca `--model gpt-6.1-sol --effort`; no Claude Code skills or hooks) | no reviewer at trivial tier; otherwise `--effort low` | `--effort medium` | `--effort high` |
 
-- At rungs 0 and 1 the implementer is the DeepSeek row where docs/12-orca-setup.md records it, otherwise the Claude row. A plan's Vendor column records which; an unplanned task follows the same rule.
-- The DeepSeek row applies only on a host where docs/12-orca-setup.md records a working dsh agent and its profiles. Elsewhere, rung 0 and 1 implementation goes to the Claude row. Registering `dsh` on a new host is machine setup, recorded in docs/12, not a ladder change.
-- Calls routed through Solvela name the model explicitly, with a Solvela alias (`haiku`, `sonnet`, `opus`, `deepseek`) or an exact provider id. Solvela's `auto` profile and routing profiles are not used as the chooser; see decision 0004, option 2.
+- At rungs 0 and 1 the implementer is the DeepSeek row where `platform.hosts` has an entry for the host, otherwise the Claude row. A plan's Vendor column records which; an unplanned task follows the same rule.
+- The DeepSeek row applies only on a host with a `platform.hosts` entry in the config, which names the `dsh` agent id and its profile per rung. For the owner's hosts, docs/12-orca-setup.md records a working dsh agent and its profiles as they are verified. Elsewhere, rung 0 and 1 implementation goes to the Claude row. Adding a host is a config change, recorded in docs/12, not a ladder change.
+- When `gateway.kind` is `solvela`, calls routed through the gateway name the model explicitly, with a Solvela alias (`haiku`, `sonnet`, `opus`, `deepseek`) or an exact provider id; the gateway's `auto` profile and routing profiles are not used as the chooser (decision 0004, option 2). With `openai-compatible`, calls name the exact provider id. With `none`, there is no gateway.
 - Orca passes `--model` and `--effort` for Claude and Codex workers. The `dsh` agent takes its model from its own profile, so a DeepSeek rung is a profile selected by name in the brief.
 
 Escalation climbs and never descends:
@@ -139,7 +139,7 @@ Tier: <trivial|normal|risky> · Rung: <0|1|2> · Model: <id as the brief names i
 6. Commit on your branch. Do not push or merge.
 
 ## HALT and report instead of guessing
-- A provider or Solvela budget error. Report it; do not retry.
+- A provider or gateway budget error. Report it; do not retry.
 - <domain-specific stop conditions>
 
 ## Report
@@ -152,14 +152,14 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 
 ## Ladder review
 
-Solvela, the owner's gateway, is the meter for the ladder (decision 0004, section 6).
+The configured gateway (`gateway.kind` in `.claude/ai-dev-system.json`, with `features.metering` on) is the meter for the ladder (decision 0004, section 6). Solvela, the owner's gateway, is the reference implementation; `openai-compatible` names any other proxy that logs spend; `none` means no meter and token counts come from worker reports only.
 
-- Which sessions route through Solvela: pay-per-token workers, which today means DeepSeek workers (already there), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on the owner's subscription. Claude Code sessions on the subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered USDC spend.
-- Attribution: every worker launched through Solvela sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. Solvela's `spend_logs` then hold model, provider, tokens and USDC cost per task with no bookkeeping by any agent. Until docs/12 records a verified way to carry that header at launch, attribution is by role through the team API key, and per-task numbers come from the worker's report.
-- Ceilings: one Solvela team per role (implementer, reviewer, research) with hourly and daily budgets. A budget hit is a HALT for the worker and an escalation to the owner, never a retry into the same ceiling.
+- Which sessions route through the configured gateway: pay-per-token workers, which today means DeepSeek workers (already there on the owner's host), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on a subscription. Claude Code sessions on a subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered spend.
+- Attribution, Solvela: every worker launched through the gateway sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. The gateway's `spend_logs` then hold model, provider, tokens and cost per task with no bookkeeping by any agent. Until docs/12 records a verified way to carry that header at launch, attribution is by role through the team API key (`gateway.team_key_env` names the variables), and per-task numbers come from the worker's report.
+- Ceilings: one gateway team or key per role (implementer, reviewer, research) with hourly and daily budgets. A budget hit is a HALT for the worker and an escalation to the owner, never a retry into the same ceiling.
 - Direct sessions: the brief tells the implementer to write `Rung: <n>; Model: <id>; Tokens: <in>/<out>` as a trailer on the commit message for trivial tasks, and in the PR body for normal and risky tasks. Orca workspace comments are not a ledger; they are overwritten.
 
-The review runs after the first ten normal-tier tasks under the ladder, then monthly. One rung-1 worker is briefed to read, for the period: Solvela team stats (`by_model` for each role team, which gives spend per role and rung because the ladder maps rung to model within a role), the PR bodies and `Rung:` trailers of direct sessions, and the orchestrator's completion reports for escalation counts. It produces spend per role and rung, escalation rate per rung, and cache hit rate, and ends with either "no change" or a draft decision record proposing a ladder change. Only an accepted decision record changes the table.
+The review runs after the first ten normal-tier tasks under the ladder, then monthly. One rung-1 worker is briefed to read, for the period: the gateway's per-team stats (on Solvela, `by_model` for each role team, which gives spend per role and rung because the ladder maps rung to model within a role), the PR bodies and `Rung:` trailers of direct sessions, and the orchestrator's completion reports for escalation counts. It produces spend per role and rung, escalation rate per rung, and cache hit rate, and ends with either "no change" or a draft decision record proposing a ladder change. Only an accepted decision record changes the table.
 
 ## Known conflicts
 
