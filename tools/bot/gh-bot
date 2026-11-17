@@ -1,11 +1,25 @@
 #!/usr/bin/env bash
-# Run gh as Solvela-bot. The token is read from 1Password for this one
-# invocation and passed through GH_TOKEN; nothing is written to disk.
+# Run gh as the agent identity. The identity comes from the user's git config
+# (aidev.bot.name, aidev.bot.tokenCommand in the GLOBAL git config only, written by
+# install-bot-identity.sh; repo-local values are ignored so a worker cannot plant one)
+# and is used only when the current repository's .claude/ai-dev-system.json
+# has features.bot_identity on (decision 0005). The token is produced by the
+# configured command for this one invocation and passed through GH_TOKEN;
+# nothing is written to disk.
 # Tracing would print the token, so it is switched off before anything else.
 { set +x; } 2>/dev/null
 set -euo pipefail
-if ! token="$(op read 'op://Agents/Solvela-bot GitHub token/credential' 2>/dev/null)" || [ -z "$token" ]; then
-  echo "gh-bot: could not read the bot token from 1Password (locked or missing)" >&2
+tools="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "gh-bot: not inside a repository; the bot identity is enabled per repository" >&2; exit 1; }
+if [ "$(python3 -I "$tools/aidev_config.py" get features.bot_identity 2>/dev/null)" != "true" ]; then
+  echo "gh-bot: features.bot_identity is off in this repository's .claude/ai-dev-system.json" >&2; exit 1
+fi
+name="$(git config --global --get aidev.bot.name || true)"
+cmd="$(git config --global --get aidev.bot.tokenCommand || true)"
+[ -n "$name" ] || { echo "gh-bot: aidev.bot.name is not set; run tools/bot/install-bot-identity.sh" >&2; exit 1; }
+[ -n "$cmd" ]  || { echo "gh-bot: aidev.bot.tokenCommand is not set; run tools/bot/install-bot-identity.sh" >&2; exit 1; }
+if ! token="$(bash -c "$cmd" 2>/dev/null)" || [ -z "$token" ]; then
+  echo "gh-bot: the token command produced nothing (secret manager locked or item missing)" >&2
   exit 1
 fi
 GH_TOKEN="$token" exec gh "$@"

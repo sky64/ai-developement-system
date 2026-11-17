@@ -5,6 +5,8 @@
 set -u
 HOOK="$(cd "$(dirname "$0")" && pwd)/orchestrator-guard.py"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
 git -C "$TMP" init -q main && git -C "$TMP/main" commit -q --allow-empty -m init
 git -C "$TMP/main" worktree add -q "$TMP/wt" -b wt
 git -C "$TMP/main" worktree add -q "$TMP/wt with space" -b wt-space
@@ -183,6 +185,86 @@ raw 2 "Bash with null command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_in
 raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":[\"ls\"]}}"
 
 # Plugin wiring: run the exact command from hooks/hooks.json, with the plugin
+# Decision 0005: features.orchestrator_guard in .claude/ai-dev-system.json,
+# read from the MAIN checkout, with env overrides. cfg <dir> <true|false>
+# writes the shipped defaults with the guard switch set.
+DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/config/ai-dev-system.defaults.json"
+git config --global --add aidev.trustedRoot "$TMP/main"   # decision 0005: only a registered main checkout may govern
+cfg() { mkdir -p "$1/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=(sys.argv[3]=="true")
+json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$1/.claude/ai-dev-system.json" "$2"; }
+runenv() { # VAR=value expected_exit cwd tool json_input
+  local envpair="$1" exp="$2" cwd="$3" tool="$4" input="$5"
+  printf '{"tool_name":"%s","cwd":"%s","tool_input":%s}' "$tool" "$cwd" "$input" \
+    | env ORCHESTRATOR_GUARD= "$envpair" python3 -I "$HOOK" 2>/dev/null; local got=$?
+  if [ "$got" = "$exp" ]; then echo "ok   exit $got  [$envpair] $tool $(echo "$input" | cut -c1-50)"
+  else echo "FAIL exit $got (want $exp)  [$envpair] cwd=$cwd $tool $input"; fail=1; fi
+}
+cfg "$M" false
+run 0 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # off by config allows
+err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>&1 >/dev/null)"
+case "$err" in "orchestrator-guard: off by config"*) echo "ok   off-by-config prints its stderr line";; *) echo "FAIL off-by-config stderr: '$err'"; fail=1;; esac
+cfg "$M" true; cfg "$W" false
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # worktree copy ignored, main copy on
+rm -rf "$W/.claude"
+printf 'not json' > "$M/.claude/ai-dev-system.json"
+run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # malformed → guard on
+cfg "$M" false; sed -i 's/"version": 1/"version": 2/' "$M/.claude/ai-dev-system.json"
+run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # wrong version → guard on
+cfg "$M" false
+runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on  2 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env beats file
+rm -f "$M/.claude/ai-dev-system.json"
+runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env alone turns off
+# The new variable beats the legacy alias, in the hook as in aidev_config.
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | env ORCHESTRATOR_GUARD=off AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on python3 -I "$HOOK" 2>/dev/null; got=$?
+[ "$got" = 2 ] && echo "ok   exit 2  [legacy off + new on] new variable wins" || { echo "FAIL exit $got (want 2) legacy off + new on"; fail=1; }
+# A worktree whose commondir has been repointed at a repo INSIDE the worktree
+# (planted by a worker) must not be able to switch the guard off: a config root
+# that sits strictly inside the hook's cwd is ignored.
+cfg "$M" true
+git -C "$W" -c user.name=t -c user.email=t@x init -q planted 2>/dev/null; git -C "$W/planted" -c user.name=t -c user.email=t@x commit -q --allow-empty -m p
+cfg "$W/planted" false
+cp "$M/.git/worktrees/wt/commondir" "$TMP/commondir.bak"; printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # planted config inside cwd ignored
+# Codex review of PR 14: the same attack with the root EQUAL to the worktree
+# (a bare repo inside the worktree as commondir, config in the worktree root)...
+git init -q --bare "$W/fake-common" 2>/dev/null; printf '%s\n' "$W/fake-common" > "$M/.git/worktrees/wt/commondir"
+cfg "$W" false
+run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # root == worktree: ignored
+rm -rf "$W/fake-common" "$W/.claude"
+# ...and from a cwd NESTED inside the worktree, with the planted repo beside it.
+printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"; mkdir -p "$W/nested"
+run 2 "$W/nested" Write "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"      # planted root inside the worktree: ignored
+cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted" "$W/nested"
+# Security review: a worker converts its worktree into a standalone repo (rm the
+# .git file, git init in place) so git_dir == common_dir there. Its config must
+# not govern, because that root is not registered in the global git config.
+W3="$TMP/wt3"; git -C "$M" worktree add -q "$W3" -b wt3; rm -f "$W3/.git"; git -C "$W3" -c user.name=t -c user.email=t@x init -q; git -C "$W3" -c user.name=t -c user.email=t@x commit -q --allow-empty -m c
+cfg "$W3" false
+run 2 "$W3" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"           # converted worktree: not a trusted root
+# Codex cycle 2: the worker writes "." into its own admin commondir (plus
+# objects/ and refs/) so git reports git_dir == common_dir for the worktree.
+# The worktree toplevel is not a registered root, so its config is ignored.
+W4="$TMP/wt4"; git -C "$M" worktree add -q "$W4" -b wt4
+ADMIN="$(git -C "$W4" rev-parse --absolute-git-dir)"; mkdir -p "$ADMIN/objects" "$ADMIN/refs"
+cp "$ADMIN/commondir" "$TMP/commondir4.bak"; printf '.\n' > "$ADMIN/commondir"
+cfg "$W4" false
+run 2 "$W4" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"           # commondir=. masquerade: ignored
+cp "$TMP/commondir4.bak" "$ADMIN/commondir"
+# An unregistered real main checkout is not trusted either: guard stays on.
+M2="$TMP/main2"; git init -q "$M2" && git -C "$M2" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
+cfg "$M2" false
+run 2 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # unregistered main: guard on
+git config --global --add aidev.trustedRoot "$M2"
+run 0 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # registered: switch honoured
+# A hook that cannot import aidev_config must still deny (never crash open).
+mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
+printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | ORCHESTRATOR_GUARD= python3 -I "$TMP/alone/hooks/orchestrator-guard.py" 2>/dev/null; got=$?
+[ "$got" = 2 ] && echo "ok   exit 2  hook without aidev_config denies" || { echo "FAIL exit $got (want 2) hook without aidev_config"; fail=1; }
+
 # root variable set the way Claude Code sets it, in the main checkout.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PLUGIN_CMD="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["PreToolUse"][0]["hooks"][0]["command"])' "$ROOT/hooks/hooks.json")"

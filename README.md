@@ -6,6 +6,19 @@ Start with the [Orca setup record](docs/12-orca-setup.md). Shared instructions a
 
 To use this system in an application repository without copying files, install it as a Claude Code plugin: [docs/11-plugin-install.md](docs/11-plugin-install.md).
 
+## Using this on your own setup
+
+The harness is built for Orca with Claude and Codex; DeepSeek workers and a metering gateway are optional. Every feature has a switch and every install-specific value lives in one file per repository ([decision 0005](docs/decisions/0005-feature-switches-and-portability.md)).
+
+1. Clone this repository (or add it as a Claude Code marketplace) and, from a human session, run `bash <this repo>/tools/harness-enable.sh /path/to/your/repo`. It enables the plugin, writes `.claude/ai-dev-system.json` from `config/ai-dev-system.defaults.json`, adds the orchestrator line to `CLAUDE.md`, registers the repo with Orca, records it as `aidev.trustedRoot` in your global git config (the hook honours a config only for registered main checkouts) and commits.
+2. Edit `.claude/ai-dev-system.json`: turn features on or off, list the hosts that run extra agents, name your gateway and model ids. `config/examples/orca-solvela.json` is the owner's own wiring (names only) and the shape to copy; pass a prepared file with `--config`.
+3. Only if you want an agent identity for pushes and merges: run `tools/bot/install-bot-identity.sh --name <login> --email <address> --token-command "<command that prints the token>"` once per machine, then set `features.bot_identity` to true in the repos that use it.
+4. Start a Claude session in the repo; the orchestrator prints its configuration on its first line. The rules are in [docs/05-delegation.md](docs/05-delegation.md).
+
+### Upgrading an existing install
+
+A repo's config governs only after its main checkout is registered as `aidev.trustedRoot` in your global git config. After updating the plugin, re-run tools/harness-enable.sh against each existing main checkout, on every machine and user account that runs the harness, even where `.claude/ai-dev-system.json` already exists; the run is idempotent and only adds the registration. Until then that repo runs on the defaults (guard on, ladder on, no metering, no bot) and the orchestrator's status line shows `config=untrusted:<path>`. Reinstalling the bot identity alone does not re-enable the bot in a repo; the registration does.
+
 ```text
 /plugin install ai-dev-system --marketplace sky64/ai-developement-system
 ```
@@ -16,6 +29,6 @@ The [automatic Codex review trial](docs/10-automatic-review.md) and its GitHub A
 
 The [original audit](docs/00-audit-and-architecture-proposal.md) and the Cloud Room setup record ([docs/03](docs/03-cloudroom-setup.md)) are historical.
 
-This repository is public configuration and contains no secrets; credentials stay in the owner's secret manager and are referenced by name only. Audit output must never be committed.
+This repository is public configuration and contains no secrets; credentials stay in each user's secret manager and are referenced by name only, and the agent identity is whatever each install configures. Audit output must never be committed.
 
-Status: Orca 1.4.242 is installed with Claude and Codex signed in. The Claude to Codex review handoff through Orca was exercised on 2026-10-27, see [docs/12](docs/12-orca-setup.md); the Cloud Room era verifications are in [docs/04](docs/04-smoke-test.md) to [docs/06](docs/06-enforcement-test.md). The restricted agent identity and the merge gate were exercised by PR 2, authored by `Solvela-bot` and approved and merged by the owner on 2026-10-22, see [docs/09](docs/09-agent-identity.md). That shows the approved path only; rejection of a merge without approval remains untested. Runtime boundaries, token rotation, gate bypass, and Orca environment recipes remain unverified.
+Status: Orca 1.4.242 is installed with Claude and Codex signed in. The Claude to Codex review handoff through Orca was exercised on 2026-10-27, see [docs/12](docs/12-orca-setup.md); the Cloud Room era verifications are in [docs/04](docs/04-smoke-test.md) to [docs/06](docs/06-enforcement-test.md). The restricted agent identity and the merge gate were exercised by PR 2, authored by `Solvela-bot` and approved and merged by the owner on 2026-10-22, see [docs/09](docs/09-agent-identity.md). That shows the approved path only; rejection of a merge without approval remains untested. Runtime boundaries, token rotation, gate bypass, and Orca environment recipes remain unverified. The model ladder ([decision 0004](docs/decisions/0004-model-ladder.md)) is adopted on 2026-11-17; its Solvela routing rows are recorded in [docs/12](docs/12-orca-setup.md) as they are verified.
