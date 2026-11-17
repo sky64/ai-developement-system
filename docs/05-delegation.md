@@ -28,6 +28,55 @@ Risk decides the tier, not size or file type. Any change to delegation policy, A
 
 The orchestrator may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`. Otherwise it delegates at every tier.
 
+## Model ladder
+
+Adopted 2026-11-17, see [decision 0004](decisions/0004-model-ladder.md). Every task has two axes. The risk tier above decides process weight: reviewer or not, record depth, attended or not; it is unchanged. The complexity rung decides the model. The rung is set per task in the plan, by the planner, and is reviewed with the plan. The purpose is to run each job on the cheapest model its complexity allows without ever shortening its toolbox, and to make that choice once, in a reviewed document, instead of at dispatch.
+
+| Rung | What the task looks like | Typical examples |
+|---|---|---|
+| 0 | Mechanical. The outcome is fully specified; the worker transcribes rather than decides. | Rename, move, format, fix a typo, change a config value, write a commit message from a diff, apply a reviewer's one-line fix |
+| 1 | Bounded. Clear acceptance criteria; the worker makes local decisions inside one module or document. | A feature or bug fix with tests inside assigned files, read-only research with a stated question, summarising a document, triaging failures |
+| 2 | Open. Several valid designs; mistakes propagate across files or across time. | Architecture, the plan itself, brainstorming, anything in the risky tier, cross-module refactors, writing a new agent or skill |
+
+Rules:
+
+- A task dispatched outside any plan carries tier and rung in its brief, and its rung defaults to its tier (trivial 0, normal 1, risky 2). That default is the whole rule; the orchestrator does not weigh complexity in the moment.
+- The risky tier is always rung 2, whatever the complexity. Nothing else couples the two axes.
+- The orchestrator's read-only native subagents run at rung 1 by default, and at rung 2 only when the question being researched is itself risky-tier. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
+
+The ladder table. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is corrected in the plan with a note here.
+
+| Role | Rung 0 | Rung 1 | Rung 2 |
+|---|---|---|---|
+| Orchestrator session | not applicable | not applicable | top Claude model (`claude-opus-5-5`) |
+| Research and read-only subagents (native, inside the orchestrator) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
+| Implementer, Claude worker (Orca `--model`) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
+| Implementer, DeepSeek worker (`dsh` profile named in the brief) | cheapest `dsh` profile | standard `dsh` profile (`deepseek-v4-pro` today) | not used; rung 2 implementation goes to the Claude row |
+| Reviewer, Codex worker (Orca `--model <codex default> --effort`) | no reviewer at trivial tier; otherwise `--effort low` | `--effort medium` | `--effort high` |
+
+- The DeepSeek row applies only on a host where docs/12-orca-setup.md records a working dsh agent and its profiles. Elsewhere, rung 0 and 1 implementation goes to the Claude row. Registering `dsh` on a new host is machine setup, recorded in docs/12, not a ladder change.
+- Calls routed through Solvela name the model explicitly, with a Solvela alias (`haiku`, `sonnet`, `opus`, `deepseek`) or an exact provider id. Solvela's `auto` profile and routing profiles are not used as the chooser; see decision 0004, option 2.
+- Orca passes `--model` and `--effort` for Claude and Codex workers. The `dsh` agent takes its model from its own profile, so a DeepSeek rung is a profile selected by name in the brief.
+
+Escalation climbs and never descends:
+
+- A task is re-dispatched one rung higher, with a summary of the failed attempt in the brief, when the worker HALTs on a stop condition in its brief, when verification fails on the worker's own report, or when the reviewer records a correctness finding (not style or wording).
+- There are at most two escalations per task, matching the two-retry allowance in AGENTS.md. After that the orchestrator reports to the owner.
+- A task is never moved down a rung once started, and a reviewer finding never lowers the rung of the fix.
+
+Tooling is rung-invariant. The Tooling table from the `plan-tooling` skill is filled before rungs are assigned and is identical at every rung. Every worker brief carries the same skill list for the task whatever its rung. Where a vendor cannot load a tool at all (Codex workers do not run Claude Code hooks or skills) the limit is recorded against the vendor in this table, and the planner picks a vendor that can.
+
+The ladder table changes only through a new decision record that cites spend and outcome numbers from at least one review period (see Ladder review below). It never changes inside a task or a plan.
+
+## Plans and owner items
+
+Adopted 2026-11-17 by owner decision, see [decision 0004](decisions/0004-model-ladder.md).
+
+- A plan is written for a piece of work: a feature, a project phase, anything with more than one task. The orchestrator does not write, so a rung-2 Claude worker writes the plan file from [docs/templates/plan.md](templates/plan.md), running the `plan-tooling` skill for the Tooling table.
+- The owner approves the plan once, together with its owner-items list. The tasks inside it then dispatch without further approval. A single task outside any plan needs no plan; its brief carries tier and rung, and the rung defaults to the tier.
+- Every task row in a plan carries: risk tier, complexity rung, the model that follows from them, the tool ids from the Tooling table, acceptance criteria, and the owner item it depends on, if any.
+- Every plan has an **Owner items** section: everything the owner must supply (credentials by name, accounts, decisions, content, approvals), each tied to the task it blocks. The orchestrator asks for these at plan approval, not when a worker is already waiting.
+
 ## Enforcement
 
 `tools/hooks/orchestrator-guard.py` is a Claude Code PreToolUse hook wired in `.claude/settings.json`. In the main checkout it blocks Edit, Write, MultiEdit, NotebookEdit, and Bash commands that write files or mutate Git. The Bash check is quote aware and operator aware: the whole command is tokenized once with `shlex` in POSIX mode with the shell operator characters as punctuation, so quoted text stays one token and `;`, `&`, `|`, `(`, `)`, redirects and newlines become their own tokens; the token stream is then split into simple commands on those operators. Parse failures deny: unterminated quotes, any token containing `$(` or a backtick, an unknown operator run, or a redirect without a target. A Bash call with a missing or null command denies. Each simple command is inspected: Git is allowed only for an explicit read-only subcommand list (`log`, `diff`, `status`, `rev-parse`, `cat-file` and the like) after skipping global options such as `-c` and `--git-dir`; `tag`, `branch`, `stash`, `worktree`, `remote`, `config` and `submodule` are allowed only when every argument is a listing or read form (for example `remote -v`, `remote show`, `remote get-url`, `config --get`, `config get`, `config --show-origin`); every other Git subcommand is denied. `sed -i` anywhere in the arguments, file-writing utilities and Python write calls are denied. Output redirects are checked on the token stream, so `>` inside a quoted string is not a write; targets other than `/dev/null`, `/tmp` and `$TMPDIR` (without `..`) are denied. A single plain `orca` or `orca-ide` command with no operator tokens is exempt. In a Git worktree, Bash is not checked, and the file write tools are allowed only when the real path of the target is inside the real path of the worktree. Malformed hook input is denied. Unit test: `bash tools/hooks/test-orchestrator-guard.sh`.
@@ -95,6 +144,17 @@ commit SHA; what you could not verify; any HALT.
 ```
 
 Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to run it. The reviewer role does not need a mirror; its brief is in the worker brief.
+
+## Ladder review
+
+Solvela, the owner's gateway, is the meter for the ladder (decision 0004, section 6).
+
+- Which sessions route through Solvela: pay-per-token workers, which today means DeepSeek workers (already there), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on the owner's subscription. Claude Code sessions on the subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered USDC spend.
+- Attribution: every worker launched through Solvela sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. Solvela's `spend_logs` then hold model, provider, tokens and USDC cost per task with no bookkeeping by any agent.
+- Ceilings: one Solvela team per role (implementer, reviewer, research) with hourly and daily budgets. A budget hit is a HALT for the worker and an escalation to the owner, never a retry into the same ceiling.
+- Direct sessions: the worker's reported token count goes into the PR body for normal and risky tasks, and into a `Rung:` trailer on the commit message for trivial tasks (the implementer writes the commit, so the trailer is in its brief). Orca workspace comments are not a ledger; they are overwritten.
+
+The review runs after the first ten normal-tier tasks under the ladder, then monthly. One rung-1 worker is briefed to read, for the period: Solvela team stats (`by_model` for each role team, which gives spend per role and rung because the ladder maps rung to model within a role), the PR bodies and `Rung:` trailers of direct sessions, and the orchestrator's completion reports for escalation counts. It produces spend per role and rung, escalation rate per rung, and cache hit rate, and ends with either "no change" or a draft decision record proposing a ladder change. Only an accepted decision record changes the table.
 
 ## Known conflicts
 
