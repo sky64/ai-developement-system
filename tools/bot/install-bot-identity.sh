@@ -62,7 +62,25 @@ for d in "${projects_dirs[@]}"; do
   if ! d="$(python3 -I - "$d" <<'PY'
 import os, re, sys
 raw = sys.argv[1]
-real = os.path.realpath(raw)
+def resolve(path):
+    """Real path with missing components allowed; raise OSError on a symlink loop anywhere."""
+    allow_missing = getattr(os.path, "ALLOW_MISSING", None)
+    if allow_missing is not None:
+        return os.path.realpath(path, strict=allow_missing)
+    # Older Python: resolve each ancestor and refuse any that stays a link (a loop).
+    parts = os.path.normpath(path).split(os.sep)
+    prefix = os.sep
+    for part in parts:
+        if not part:
+            continue
+        prefix = os.path.realpath(os.path.join(prefix, part))
+        if os.path.islink(prefix):
+            raise OSError("symlink loop")
+    return prefix
+try:
+    real = resolve(raw)
+except OSError:
+    sys.stderr.write("install-bot-identity: --projects-dir '%s' resolves through a symlink loop; nothing was changed\n" % raw); sys.exit(2)
 if os.path.islink(real):
     sys.stderr.write("install-bot-identity: --projects-dir '%s' resolves through a symlink loop; nothing was changed\n" % raw); sys.exit(2)
 if re.search(r'["\\*?\[\]\n\r]', real) or real != real.strip(" ") or real.endswith("/ "):

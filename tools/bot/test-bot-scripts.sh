@@ -81,7 +81,8 @@ grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdi
 # after resolution, which means validating inside Python before the path crosses back into Bash.
 mkdir -p "$HOME/outer/bad"$'\n'; ln -sfn "$HOME/outer/bad"$'\n' "$HOME/cleanalias"; ln -sfn "$HOME/loop1" "$HOME/loop2"; ln -sfn "$HOME/loop2" "$HOME/loop1"
 before="$(cat "$GC")"; k0="$(git config --global --get aidev.bot.tokenCommand)"
-for badd in "$HOME/cleanalias" "$HOME/loop1"; do
+mkdir -p "$HOME/future"   # Codex cycle 6: a loop in an ANCESTOR component must be refused too, with or without a .. after it
+for badd in "$HOME/cleanalias" "$HOME/loop1" "$HOME/loop1/child" "$HOME/loop1/../future"; do
   "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
   [ "$rc" = 2 ] || bad "resolved-path problem accepted (rc=$rc): $badd"
 done
