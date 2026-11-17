@@ -71,6 +71,15 @@ else
   cp "$defaults" "$config_dst"; echo "config: written from defaults"
 fi
 
+# 1c. register the main checkout as a trusted root (decision 0005): the hook and
+# the reader honour .claude/ai-dev-system.json only for roots listed here.
+if git config --global --get-all aidev.trustedRoot 2>/dev/null | grep -qx -- "$repo"; then
+  echo "trust: $repo already registered as aidev.trustedRoot"
+else
+  git config --global --add aidev.trustedRoot "$repo"
+  echo "trust: registered $repo as aidev.trustedRoot in the global git config"
+fi
+
 # 2. CLAUDE.md orchestrator line
 line='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.'
 if [ -f "$repo/CLAUDE.md" ] && grep -qF "ai-dev-system:orchestrator" "$repo/CLAUDE.md"; then

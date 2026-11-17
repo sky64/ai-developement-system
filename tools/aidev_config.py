@@ -10,7 +10,9 @@ orchestrator. Standard library only.
 
 Rules:
 - The config is read from the MAIN checkout (parent of the git common dir),
-  never from a worktree's branch, so a worker cannot flip a switch on itself.
+  never from a worktree's branch, and only when that checkout is registered
+  as aidev.trustedRoot in the user's GLOBAL git config (harness-enable adds
+  it), so a worker cannot flip a switch on itself by editing git state.
 - Missing, unreadable, non-object or wrong-version files count as absent and
   every reader falls back to the shipped defaults (fail closed for the guard).
 - Environment overrides AI_DEV_SYSTEM_FEATURE_<NAME>=on|off beat the file;
@@ -69,15 +71,15 @@ def main_checkout(cwd: str):
     return os.path.dirname(paths[1]) if paths else None
 
 
-def trusted_root(cwd: str):
-    """The main checkout whose config may govern cwd, or None.
+def candidate_root(cwd: str):
+    """The main checkout git state points at for cwd, after structural checks.
 
     In the main checkout (git dir equals common dir) that is the toplevel.
     In a linked worktree the candidate is the parent of the common dir, and it
     is rejected when it is the worktree itself or anything inside it, or when
-    the worktree's admin dir does not live under <common>/worktrees/. Those are
-    the cheap ways a worker can feed the hook a config it controls. A worker
-    that writes elsewhere through Bash is the documented tripwire limit.
+    the worktree's admin dir does not live under <common>/worktrees/. This is
+    still derived from git state a worker can edit (it can even turn its
+    worktree into a standalone repo), so it is a candidate, not a trusted root.
     """
     paths = _git_paths(cwd)
     if not paths:
@@ -94,6 +96,36 @@ def trusted_root(cwd: str):
     if not _inside_or_equal(git_dir, worktrees_dir) or os.path.realpath(git_dir) == worktrees_dir:
         return None
     return root
+
+
+def registered_roots():
+    """Main checkouts registered as trusted in the user's GLOBAL git config
+    (aidev.trustedRoot, multi-valued; harness-enable adds the entry). The
+    global config is the pin outside any file a worker can edit in its
+    worktree; a worker that rewrites it through Bash is the tripwire limit."""
+    try:
+        out = subprocess.run(
+            ["git", "config", "--global", "--get-all", "aidev.trustedRoot"],
+            capture_output=True, text=True, check=False, timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if out.returncode != 0:
+        return []
+    return [os.path.realpath(line.strip()) for line in out.stdout.splitlines() if line.strip()]
+
+
+def trusted_root(cwd: str):
+    """The main checkout whose config may govern cwd, or None.
+
+    The structural candidate (candidate_root) must also be registered in the
+    user's global git config. Without the registration the file is reported
+    as untrusted by `status` and every reader falls back to the defaults.
+    """
+    root = candidate_root(cwd)
+    if root and os.path.realpath(root) in registered_roots():
+        return root
+    return None
 
 
 def config_path(root: str) -> str:
@@ -173,7 +205,13 @@ def _onoff(value) -> str:
 def status_line(cfg, cwd: str) -> str:
     base = defaults()
     root = trusted_root(cwd)
-    path = config_path(root) if (root and cfg is not None) else "none"
+    if root and cfg is not None:
+        path = config_path(root)
+    else:
+        path = "none"
+        candidate = candidate_root(cwd)
+        if candidate and not root and os.path.exists(config_path(candidate)):
+            path = "untrusted:" + config_path(candidate)
     eff = cfg if isinstance(cfg, dict) else base
     platform = eff.get("platform", {}) if isinstance(eff.get("platform"), dict) else {}
     gateway = eff.get("gateway", {}) if isinstance(eff.get("gateway"), dict) else {}

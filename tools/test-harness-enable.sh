@@ -9,6 +9,7 @@ EXAMPLE="$ROOT/config/examples/orca-solvela.json"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 printf '#!/usr/bin/env bash\necho "{}"\n' > "$TMP/orca-stub"; chmod +x "$TMP/orca-stub"
 export ORCA_CLI_COMMAND="$TMP/orca-stub"
+export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
 fail=0
 ok()  { echo "ok   $1"; }
@@ -25,6 +26,7 @@ grep -q '"ai-dev-system@ai-dev-system": true' "$R/.claude/settings.json" && ok "
 grep -q 'ai-dev-system:orchestrator' "$R/CLAUDE.md" && ok "CLAUDE.md has the orchestrator line" || bad "CLAUDE.md"
 [ "$(git -C "$R" log -1 --format=%s)" = "chore: enable ai-dev-system plugin" ] && ok "committed" || bad "commit message: $(git -C "$R" log -1 --format=%s)"
 git -C "$R" ls-files --error-unmatch .claude/ai-dev-system.json >/dev/null 2>&1 && ok "config file is tracked" || bad "config not tracked"
+[ "$(git config --global --get-all aidev.trustedRoot | grep -c -x "$R")" = 1 ] && ok "repo registered once as a trusted root in the global git config" || bad "trustedRoot registration: $(git config --global --get-all aidev.trustedRoot)"
 
 # 2. second run: idempotent
 before="$(sums "$R")"; n1="$(git -C "$R" rev-list --count HEAD)"
@@ -32,6 +34,7 @@ out="$(bash "$ENABLE" "$R" 2>&1)"; rc=$?
 after="$(sums "$R")"; n2="$(git -C "$R" rev-list --count HEAD)"
 [ "$rc" = 0 ] && case "$out" in *"config: already present"*) true;; *) false;; esac && ok "second run says already present" || bad "second run: rc=$rc out=$out"
 [ "$before" = "$after" ] && [ "$n1" = "$n2" ] && ok "second run changes nothing and adds no commit" || bad "second run changed files or committed"
+[ "$(git config --global --get-all aidev.trustedRoot | grep -c -x "$R")" = 1 ] && ok "second run does not duplicate the trusted root" || bad "trustedRoot duplicated"
 
 # 3. --config copies a prepared file
 R2="$TMP/r2"; newrepo "$R2"

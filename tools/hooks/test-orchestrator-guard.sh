@@ -5,6 +5,8 @@
 set -u
 HOOK="$(cd "$(dirname "$0")" && pwd)/orchestrator-guard.py"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
 git -C "$TMP" init -q main && git -C "$TMP/main" commit -q --allow-empty -m init
 git -C "$TMP/main" worktree add -q "$TMP/wt" -b wt
 git -C "$TMP/main" worktree add -q "$TMP/wt with space" -b wt-space
@@ -187,6 +189,7 @@ raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_in
 # read from the MAIN checkout, with env overrides. cfg <dir> <true|false>
 # writes the shipped defaults with the guard switch set.
 DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/config/ai-dev-system.defaults.json"
+git config --global --add aidev.trustedRoot "$TMP/main"   # decision 0005: only a registered main checkout may govern
 cfg() { mkdir -p "$1/.claude"; python3 -I -c '
 import json,sys
 d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=(sys.argv[3]=="true")
@@ -235,6 +238,27 @@ rm -rf "$W/fake-common" "$W/.claude"
 printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"; mkdir -p "$W/nested"
 run 2 "$W/nested" Write "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"      # planted root inside the worktree: ignored
 cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted" "$W/nested"
+# Security review: a worker converts its worktree into a standalone repo (rm the
+# .git file, git init in place) so git_dir == common_dir there. Its config must
+# not govern, because that root is not registered in the global git config.
+W3="$TMP/wt3"; git -C "$M" worktree add -q "$W3" -b wt3; rm -f "$W3/.git"; git -C "$W3" -c user.name=t -c user.email=t@x init -q; git -C "$W3" -c user.name=t -c user.email=t@x commit -q --allow-empty -m c
+cfg "$W3" false
+run 2 "$W3" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"           # converted worktree: not a trusted root
+# Codex cycle 2: the worker writes "." into its own admin commondir (plus
+# objects/ and refs/) so git reports git_dir == common_dir for the worktree.
+# The worktree toplevel is not a registered root, so its config is ignored.
+W4="$TMP/wt4"; git -C "$M" worktree add -q "$W4" -b wt4
+ADMIN="$(git -C "$W4" rev-parse --absolute-git-dir)"; mkdir -p "$ADMIN/objects" "$ADMIN/refs"
+cp "$ADMIN/commondir" "$TMP/commondir4.bak"; printf '.\n' > "$ADMIN/commondir"
+cfg "$W4" false
+run 2 "$W4" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"           # commondir=. masquerade: ignored
+cp "$TMP/commondir4.bak" "$ADMIN/commondir"
+# An unregistered real main checkout is not trusted either: guard stays on.
+M2="$TMP/main2"; git init -q "$M2" && git -C "$M2" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
+cfg "$M2" false
+run 2 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # unregistered main: guard on
+git config --global --add aidev.trustedRoot "$M2"
+run 0 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # registered: switch honoured
 # A hook that cannot import aidev_config must still deny (never crash open).
 mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \

@@ -13,6 +13,7 @@ export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"; : > "$GIT_CONFIG_GLOBAL"
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "${GH_TOKEN:-no-token}"\n' > "$TMP/bin/gh"; chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
 R="$TMP/repo"; git init -q "$R" && git -C "$R" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
+git config --global --add aidev.trustedRoot "$R"   # decision 0005: the switch is read only from a registered root
 fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }

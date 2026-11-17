@@ -8,6 +8,9 @@ MOD="$ROOT/tools/aidev_config.py"
 DEFAULTS="$ROOT/config/ai-dev-system.defaults.json"
 EXAMPLE="$ROOT/config/examples/orca-solvela.json"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+git config --global --add aidev.trustedRoot "$TMP/main"
 git -C "$TMP" init -q main && git -C "$TMP/main" commit -q --allow-empty -m init
 git -C "$TMP/main" worktree add -q "$TMP/wt" -b wt
 M="$TMP/main"; W="$TMP/wt"
@@ -84,6 +87,13 @@ out="$(run "$W" get features.orchestrator_guard)"; [ "$out" = "true" ] && ok "ge
 cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted"
 out="$(run "$W" status)"
 case "$out" in *"config=$M/.claude/ai-dev-system.json"*) ok "status reads the real main checkout again once commondir is restored";; *) bad "restored status: $out";; esac
+
+# 14. a config at an unregistered root is reported as untrusted and not applied
+M3="$TMP/main3"; git init -q "$M3" && git -C "$M3" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
+mkdir -p "$M3/.claude"; python3 -I -c '
+import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/ai-dev-system.json"
+out="$(run "$M3" status)"
+case "$out" in *"config=untrusted:$M3/.claude/ai-dev-system.json guard=on"*) ok "status marks a config at an unregistered root untrusted and keeps defaults";; *) bad "untrusted status: $out";; esac
 
 # 12. an unknown metering kind falls back to none; env overrides do not apply to metering
 setfeat '"bogus"' metering

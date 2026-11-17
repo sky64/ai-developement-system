@@ -26,10 +26,11 @@ checkout's .claude/ai-dev-system.json, or AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUA
 in the environment (ORCHESTRATOR_GUARD=off is the older alias). The env
 override wins over the file. A missing, unreadable or wrong-version config
 means the guard stays on. A worktree's own copy of the file is never read,
-and the config root is aidev_config.trusted_root: in a linked worktree a
-root that is the worktree itself or inside it, or a common dir that does
-not hold this worktree's admin dir, is rejected (a repo a worker planted and
-pointed commondir at), so a worker cannot switch the guard off for itself. A worker that writes to the main checkout's
+and the config root is aidev_config.trusted_root: the main checkout that git
+state points at must also be registered as aidev.trustedRoot in the user's
+GLOBAL git config (harness-enable registers it). A worker that repoints its
+commondir, plants a repo, or turns its worktree into a standalone repo gets
+an unregistered root, so its config is ignored and the guard stays on. A worker that writes to the main checkout's
 file through Bash can still do so: that is the documented tripwire limit
 (docs/05, Enforcement), not something this hook can close. These overrides are a
 convention, not a boundary, and so is the Bash check below. The Bash check
