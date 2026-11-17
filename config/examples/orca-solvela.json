@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "features": {
+    "orchestrator_guard": true,
+    "model_ladder": true,
+    "bot_identity": true,
+    "metering": "solvela",
+    "build_map": false
+  },
+  "platform": {
+    "kind": "orca",
+    "hosts": {
+      "home-office-omarchy": {
+        "deepseek_agent": "dsh-tui",
+        "dsh_profiles": { "0": "", "1": "" }
+      }
+    }
+  },
+  "gateway": {
+    "kind": "solvela",
+    "base_url": "https://api.solvela.ai",
+    "team_key_env": {
+      "implementer": "SOLVELA_KEY_IMPLEMENTER",
+      "reviewer": "SOLVELA_KEY_REVIEWER",
+      "research": "SOLVELA_KEY_RESEARCH"
+    }
+  },
+  "models": {
+    "research": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+    "claude_implementer": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
+    "codex_reviewer": {
+      "model": "gpt-6.1-sol",
+      "effort": ["low", "medium", "high"]
+    }
+  }
+}
