@@ -43,13 +43,21 @@ done
 if [ "${#projects_dirs[@]}" -eq 0 ]; then
   for d in "$HOME/projects" "$HOME/Projects"; do [ -d "$d" ] && projects_dirs+=("$d"); done
 fi
+reject_dir() {
+  echo "install-bot-identity: --projects-dir '$1' contains a character that cannot be written safely into a git includeIf pattern (quote, backslash, * ? [ ], newline, carriage return, or leading/trailing space)" >&2; exit 2
+}
 normalized=()
 for d in "${projects_dirs[@]}"; do
+  # Validate the RAW argument first: Bash's $(...) strips trailing newlines, so a
+  # check after normalisation would miss a directory that ends in one and
+  # silently install a rule for its newline-less sibling.
+  case "$d" in
+    *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' '|*'/ '*) reject_dir "$d" ;;
+  esac
   case "$d" in /*) ;; *) d="$PWD/$d" ;; esac
   d="$(python3 -I -c 'import os, sys; print(os.path.normpath(sys.argv[1]))' "$d")"
   case "$d" in
-    *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' ')
-      echo "install-bot-identity: --projects-dir '$d' contains a character that cannot be written safely into a git includeIf pattern (quote, backslash, * ? [ ], newline, or leading/trailing space)" >&2; exit 2 ;;
+    *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|*$'\r'*|' '*|*' ') reject_dir "$d" ;;
   esac
   normalized+=("$d")
 done

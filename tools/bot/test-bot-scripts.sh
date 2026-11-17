@@ -68,6 +68,10 @@ for badd in "$HOME/ba\"d" "$HOME/code[1]" "$HOME/co*de"; do
   [ "$rc" = 2 ] || bad "special-char dir accepted (rc=$rc): $badd"
 done
 [ "$before" = "$(cat "$GC")" ] && ok "quote, bracket and star in --projects-dir are refused and the config is untouched" || bad "config changed by a refused --projects-dir"
+# Codex cycle 3: a trailing newline survives Bash's \$(...) stripping only if validated on the raw argument.
+k0="$(git config --global --get aidev.bot.tokenCommand)"; before="$(cat "$GC")"
+"$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$HOME/code"$'\n' >/dev/null 2>&1; rc=$?
+[ "$rc" = 2 ] && [ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "trailing newline in --projects-dir is refused before any write" || bad "trailing LF: rc=$rc config_changed=$([ "$before" = "$(cat "$GC")" ] || echo yes) key=$(git config --global --get aidev.bot.tokenCommand)"
 # Codex cycle 2: an unmatched begin marker must abort before any write; relative and
 # slash-heavy directories normalise to one absolute pattern; a legacy block followed by
 # a user include migrates with the user include intact.
