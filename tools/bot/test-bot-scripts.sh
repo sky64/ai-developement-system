@@ -41,6 +41,20 @@ git config --global aidev.bot.name Legacy; git config --global aidev.bot.tokenCo
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
 [ -z "$(git config --global --get aidev.bot.name)" ] && [ -z "$(git config --global --get aidev.bot.tokenCommand)" ] && [ "$(git config --global --get crew64.bot.name)" = "B" ] && ok "installer removes legacy aidev.bot.* keys" || bad "legacy keys: aidev=$(git config --global --get aidev.bot.name) crew64=$(git config --global --get crew64.bot.name)"
 
+# 2a2. a legacy [aidev "bot"] section sitting right above the marked block must not take the begin
+# marker with it when it is removed (git deletes a section's trailing comment lines too).
+printf '[aidev "bot"]\n\tname = Legacy\n\ttokenCommand = echo legacy\n\n' > "$TMP/legacy-section"
+python3 -I - "$GIT_CONFIG_GLOBAL" "$TMP/legacy-section" <<'PY'
+import pathlib, sys
+gc, sec = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]).read_text()
+text = gc.read_text()
+marker = "# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>"
+assert marker in text
+gc.write_text(text.replace(marker, sec + marker, 1))
+PY
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && [ "$(grep -c '^# >>> orca-bot identity' "$GIT_CONFIG_GLOBAL")" = 1 ] && [ "$(grep -c '^# <<< orca-bot identity' "$GIT_CONFIG_GLOBAL")" = 1 ] && [ -z "$(git config --global --get aidev.bot.name)" ] && ok "legacy section above the block is removed without losing the begin marker" || bad "legacy-above-block: rc=$rc begin=$(grep -c '^# >>> orca-bot' "$GIT_CONFIG_GLOBAL") end=$(grep -c '^# <<< orca-bot' "$GIT_CONFIG_GLOBAL") aidev=$(git config --global --get aidev.bot.name)"
+
 # 2b. the include rules follow the projects directories that exist, not a hard-coded ~/Projects
 GC="$XDG_CONFIG_HOME/git/config"
 rules() { grep -c '^\[includeIf "gitdir:' "$GC"; }
