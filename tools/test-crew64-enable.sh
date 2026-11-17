@@ -89,6 +89,29 @@ grep -q '"crew64@crew64": true' "$R10/.claude/settings.json" && ! grep -q 'ai-de
 git config --global --get-all crew64.trustedRoot | grep -qxF "$(realpath "$R10")" && ! git config --global --get-all aidev.trustedRoot 2>/dev/null | grep -qxF "$(realpath "$R10")" && ok "trusted-root registration moves from aidev to crew64" || bad "trustedRoot migration: crew64=$(git config --global --get-all crew64.trustedRoot | tr '\n' ' ') aidev=$(git config --global --get-all aidev.trustedRoot 2>/dev/null | tr '\n' ' ')"
 git -C "$R10" ls-files --error-unmatch .claude/crew64.json >/dev/null 2>&1 && ! git -C "$R10" ls-files --error-unmatch .claude/ai-dev-system.json >/dev/null 2>&1 && ok "migration is committed (old file untracked, new file tracked)" || bad "migration commit: $(git -C "$R10" ls-files .claude)"
 
+# Codex review of PR 16: four migration defects.
+# (a) an unrelated aidev.* key survives the trusted-root move; (c) a path with a regex character and a
+# duplicate entry migrate exactly; (d) the legacy CLAUDE.md orchestrator line is replaced, not kept; (b) a
+# TRACKED old config is removed from HEAD by the migration commit.
+R11="$TMP/r11+plus"; newrepo "$R11"; mkdir -p "$R11/.claude"; cp "$DEFAULTS" "$R11/.claude/ai-dev-system.json"
+git -C "$R11" add .claude/ai-dev-system.json && git -C "$R11" commit -q -m "old config tracked"
+printf 'If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.\n' > "$R11/CLAUDE.md"
+git -C "$R11" add CLAUDE.md && git -C "$R11" commit -q -m "old orchestrator line"
+git config --global aidev.customSetting keep-me
+git config --global --add aidev.trustedRoot "$(realpath "$R11")"; git config --global --add aidev.trustedRoot "$(realpath "$R11")"   # duplicate on purpose
+git config --global --add aidev.trustedRoot "$(realpath "$TMP")/r11plus"                                                            # the regex-collision sibling
+out="$(bash "$ENABLE" "$R11" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ "$(git config --global --get aidev.customSetting)" = "keep-me" ] && ok "unrelated aidev.* key survives the trusted-root move" || bad "aidev.customSetting lost (rc=$rc): $(git config --global --get aidev.customSetting)"
+! git config --global --get-all aidev.trustedRoot | grep -qxF "$(realpath "$R11")" && git config --global --get-all aidev.trustedRoot | grep -qxF "$(realpath "$TMP")/r11plus" && [ "$(git config --global --get-all crew64.trustedRoot | grep -cxF "$(realpath "$R11")")" = 1 ] && ok "trusted root with + migrates exactly: duplicates gone, regex sibling untouched, one crew64 entry" || bad "trustedRoot exactness: aidev=$(git config --global --get-all aidev.trustedRoot | tr '\n' ' ') crew64=$(git config --global --get-all crew64.trustedRoot | grep -c "$(basename "$R11")")"
+[ "$(grep -c 'orchestrator skill at session start' "$R11/CLAUDE.md")" = 1 ] && grep -q 'crew64:orchestrator' "$R11/CLAUDE.md" && ! grep -q 'ai-dev-system:orchestrator' "$R11/CLAUDE.md" && ok "legacy CLAUDE.md orchestrator line is replaced, not duplicated" || bad "CLAUDE.md migration: $(grep -c orchestrator "$R11/CLAUDE.md") lines; legacy=$(grep -c 'ai-dev-system:orchestrator' "$R11/CLAUDE.md")"
+git -C "$R11" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && ! git -C "$R11" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && [ -z "$(git -C "$R11" status --porcelain)" ] && ok "tracked old config is removed from HEAD and the tree is clean" || bad "tracked migration: HEAD=$(git -C "$R11" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R11" status --porcelain | tr '\n' ' ')"
+bash "$ENABLE" "$R11" >/dev/null 2>&1
+[ "$(grep -c 'orchestrator skill at session start' "$R11/CLAUDE.md")" = 1 ] && ok "rerun keeps a single orchestrator line" || bad "rerun duplicated the orchestrator line"
+R12="$TMP/r12"; newrepo "$R12"
+git config --global --unset-all aidev.trustedRoot 2>/dev/null || true; git config --global --add aidev.trustedRoot "$(realpath "$R12")"   # the only legacy root
+bash "$ENABLE" "$R12" >/dev/null 2>&1
+[ "$(git config --global --get aidev.customSetting)" = "keep-me" ] && [ -z "$(git config --global --get-all aidev.trustedRoot)" ] && ok "moving the only legacy root keeps unrelated aidev.* keys" || bad "only-root move: customSetting=$(git config --global --get aidev.customSetting) aidev.trustedRoot=$(git config --global --get-all aidev.trustedRoot | tr '\n' ' ')"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

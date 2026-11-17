@@ -78,9 +78,11 @@ PY
 # 1b. per-repo config (decision 0005)
 config_dst="$repo/.claude/crew64.json"
 legacy_cfg="$repo/.claude/ai-dev-system.json"
+legacy_was_tracked=0
 if [ -e "$legacy_cfg" ] && [ ! -e "$config_dst" ]; then
   # Decision 0006: carry an existing config over to the new name, keeping git history when tracked.
   if git -C "$repo" ls-files --error-unmatch .claude/ai-dev-system.json >/dev/null 2>&1; then
+    legacy_was_tracked=1
     git -C "$repo" mv .claude/ai-dev-system.json .claude/crew64.json
   else
     mv "$legacy_cfg" "$config_dst"
@@ -99,8 +101,8 @@ fi
 # the reader honour .claude/crew64.json only for roots listed here.
 # Decision 0006: a registration made under the old key moves to the new one.
 if git config --global --get-all aidev.trustedRoot 2>/dev/null | grep -qxF -- "$repo"; then
-  git config --global --unset aidev.trustedRoot "^$(printf '%s' "$repo" | sed 's/[][\\.*^$]/\\&/g')\$" 2>/dev/null || true
-  git config --global --get-all aidev.trustedRoot >/dev/null 2>&1 || git config --global --remove-section aidev 2>/dev/null || true
+  # Exact, literal match of every duplicate; other aidev.* keys are left alone.
+  git config --global --fixed-value --unset-all aidev.trustedRoot "$repo"
   echo "trust: moved $repo from aidev.trustedRoot to crew64.trustedRoot"
 fi
 if git config --global --get-all crew64.trustedRoot 2>/dev/null | grep -qxF -- "$repo"; then
@@ -112,7 +114,17 @@ fi
 
 # 2. CLAUDE.md orchestrator line
 line='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.'
-if [ -f "$repo/CLAUDE.md" ] && grep -qF "crew64:orchestrator" "$repo/CLAUDE.md"; then
+if [ -f "$repo/CLAUDE.md" ] && grep -qF "ai-dev-system:orchestrator" "$repo/CLAUDE.md"; then
+  # Decision 0006: replace the legacy instruction in place rather than leaving a dead skill reference.
+  python3 -I - "$repo/CLAUDE.md" "$line" <<'PY'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1]); new = sys.argv[2]
+text = p.read_text()
+text = re.sub(r"^[^\n]*ai-dev-system:orchestrator[^\n]*$", lambda m: new, text, count=1, flags=re.M)
+p.write_text(text)
+PY
+  echo "CLAUDE.md: legacy orchestrator line replaced"
+elif [ -f "$repo/CLAUDE.md" ] && grep -qF "crew64:orchestrator" "$repo/CLAUDE.md"; then
   echo "CLAUDE.md: orchestrator line already present"
 else
   { [ -f "$repo/CLAUDE.md" ] && [ -s "$repo/CLAUDE.md" ] && printf '\n'; printf '%s\n' "$line"; } >> "$repo/CLAUDE.md"
@@ -143,7 +155,7 @@ fi
 # 4. Commit
 files=(.claude/settings.json .claude/crew64.json CLAUDE.md)
 git -C "$repo" add "${files[@]}"
-git -C "$repo" ls-files --error-unmatch .claude/ai-dev-system.json >/dev/null 2>&1 && files+=(.claude/ai-dev-system.json) || true
+[ "$legacy_was_tracked" = 1 ] && files+=(.claude/ai-dev-system.json)   # the rename's deletion side belongs in the same commit
 if [ "$commit" = 1 ]; then
   if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
     echo "commit: nothing to commit"
