@@ -69,6 +69,15 @@ printf '#!/usr/bin/env bash\ncase "$*" in *"repo show"*) exit 7;; *"repo add"*) 
 out="$(ORCA_CLI_COMMAND="$TMP/orca-fail" bash "$ENABLE" "$R8" 2>&1)"; rc=$?
 [ "$rc" = 1 ] && case "$out" in *orca*) true;; *) false;; esac && ok "failed Orca registration → exit 1 naming orca" || bad "orca failure: rc=$rc out=$(echo "$out" | tail -2)"
 
+# 5f. only a main checkout may be registered as a trusted root: a linked
+# worktree is refused, and a subdirectory registers the real toplevel.
+R9="$TMP/r9"; newrepo "$R9"; git -C "$R9" worktree add -q "$TMP/r9-wt" -b wt
+out="$(bash "$ENABLE" "$TMP/r9-wt" 2>&1)"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"main checkout"*) true;; *) false;; esac && ! git config --global --get-all aidev.trustedRoot | grep -qxF "$TMP/r9-wt" && ok "a linked worktree is refused and not registered" || bad "worktree enable: rc=$rc out=$(echo "$out" | tail -1)"
+mkdir -p "$R9/sub/dir"
+bash "$ENABLE" "$R9/sub/dir" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && git config --global --get-all aidev.trustedRoot | grep -qxF "$(realpath "$R9")" && ! git config --global --get-all aidev.trustedRoot | grep -qxF "$R9/sub/dir" && [ -e "$R9/.claude/ai-dev-system.json" ] && ok "a subdirectory registers and configures the toplevel" || bad "subdir enable: rc=$rc roots=$(git config --global --get-all aidev.trustedRoot | tr '\n' ' ')"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

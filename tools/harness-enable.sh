@@ -24,8 +24,19 @@ while [ $# -gt 0 ]; do
     *) repo="$1"; shift ;;
   esac
 done
-repo="$(cd "$repo" && pwd)"
+repo="$(cd "$repo" && pwd -P)"
 git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || { echo "harness-enable: not a git repository: $repo" >&2; exit 1; }
+# Only a MAIN checkout may be harnessed and registered as a trusted root
+# (decision 0005): the git dir must be the common dir, and the registered path
+# is the real toplevel, never the raw argument (a subdirectory or a worktree).
+gitdir="$(git -C "$repo" rev-parse --path-format=absolute --git-dir)"
+common="$(git -C "$repo" rev-parse --path-format=absolute --git-common-dir)"
+toplevel="$(git -C "$repo" rev-parse --path-format=absolute --show-toplevel)"
+if [ "$(realpath "$gitdir")" != "$(realpath "$common")" ]; then
+  echo "harness-enable: $repo is a linked worktree, not the main checkout ($(dirname "$common")). Run this against the main checkout." >&2
+  exit 1
+fi
+repo="$(realpath "$toplevel")"
 echo "target: $repo"
 
 # 0. Validate a prepared config before touching anything.
@@ -73,7 +84,7 @@ fi
 
 # 1c. register the main checkout as a trusted root (decision 0005): the hook and
 # the reader honour .claude/ai-dev-system.json only for roots listed here.
-if git config --global --get-all aidev.trustedRoot 2>/dev/null | grep -qx -- "$repo"; then
+if git config --global --get-all aidev.trustedRoot 2>/dev/null | grep -qxF -- "$repo"; then
   echo "trust: $repo already registered as aidev.trustedRoot"
 else
   git config --global --add aidev.trustedRoot "$repo"
