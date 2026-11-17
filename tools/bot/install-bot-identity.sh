@@ -31,6 +31,19 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$name" ] && [ -n "$email" ] && [ -n "$token_cmd" ] || { echo "install-bot-identity: --name, --email and --token-command are all required" >&2; exit 2; }
+# Which projects directories get the worktree rule: the flags, else whichever
+# of ~/projects and ~/Projects exist (both spellings are common). Validate
+# before anything is written: the path lands inside a quoted git config value
+# and a glob pattern, so quote, backslash and glob characters are refused.
+if [ "${#projects_dirs[@]}" -eq 0 ]; then
+  for d in "$HOME/projects" "$HOME/Projects"; do [ -d "$d" ] && projects_dirs+=("$d"); done
+fi
+for d in "${projects_dirs[@]}"; do
+  case "$d" in
+    *'"'*|*'\'*|*'*'*|*'?'*|*'['*|*']'*|*$'\n'*|' '*|*' '|'')
+      echo "install-bot-identity: --projects-dir '$d' contains a character that cannot be written safely into a git includeIf pattern (quote, backslash, * ? [ ], newline, or leading/trailing space)" >&2; exit 2 ;;
+  esac
+done
 here="$(cd "$(dirname "$0")" && pwd)"
 cfg="${XDG_CONFIG_HOME:-$HOME/.config}/git"
 mkdir -p "$cfg" "$HOME/.local/bin"
@@ -48,11 +61,6 @@ cat > "$cfg/orca-bot.gitconfig" <<CFG
 	helper =
 	helper = !$HOME/.local/bin/git-credential-op-bot
 CFG
-# Which projects directories get the worktree rule: the flags, else whichever
-# of ~/projects and ~/Projects exist (both spellings are common).
-if [ "${#projects_dirs[@]}" -eq 0 ]; then
-  for d in "$HOME/projects" "$HOME/Projects"; do [ -d "$d" ] && projects_dirs+=("$d"); done
-fi
 # Git's gitdir: patterns take ~/ for the home directory; absolute paths pass through.
 gitdir_pattern() {
   case "$1" in
@@ -60,29 +68,46 @@ gitdir_pattern() {
     *) printf '%s' "$1" ;;
   esac
 }
-marker="# orca-bot identity (tools/bot/install-bot-identity.sh)"
-block="$marker"$'\n'
+begin="# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>"
+end="# <<< orca-bot identity <<<"
+legacy="# orca-bot identity (tools/bot/install-bot-identity.sh)"
+block="$begin"$'\n'
 for d in "${projects_dirs[@]}"; do
   block+="[includeIf \"gitdir:$(gitdir_pattern "${d%/}")/*/.git/worktrees/\"]"$'\n\t'"path = orca-bot.gitconfig"$'\n'
 done
-block+='[includeIf "gitdir:~/orca/workspaces/"]'$'\n\t'"path = orca-bot.gitconfig"$'\n'
+block+='[includeIf "gitdir:~/orca/workspaces/"]'$'\n\t'"path = orca-bot.gitconfig"$'\n'"$end"$'\n'
 touch "$cfg/config"
 before="$(cat "$cfg/config")"
-# Drop the previous block (marker line plus its includeIf/path lines), then append the new one.
-python3 -I - "$cfg/config" "$marker" "$block" <<'PY'
+# Replace the managed block. A begin/end-marked block is removed whole. A legacy
+# block (bare marker) is removed only as far as its exact header + path pairs
+# run; the first line that is not such a pair ends it, so nothing of the
+# user's own config is touched. Then the new block is appended.
+python3 -I - "$cfg/config" "$begin" "$end" "$legacy" "$block" <<'PY'
 import sys, pathlib
-path, marker, block = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+path, begin, end, legacy, block = pathlib.Path(sys.argv[1]), *sys.argv[2:6]
 lines = path.read_text().splitlines()
 out, i = [], 0
+def managed_pair(j):
+    return (j + 1 < len(lines)
+            and lines[j].startswith('[includeIf "gitdir:')
+            and lines[j].rstrip().endswith('"]')
+            and lines[j + 1].strip() == "path = orca-bot.gitconfig")
 while i < len(lines):
-    if lines[i].strip() == marker:
+    s = lines[i].strip()
+    if s == begin:
+        j = i + 1
+        while j < len(lines) and lines[j].strip() != end:
+            j += 1
+        i = j + 1 if j < len(lines) else len(lines)
+    elif s == legacy:
         i += 1
-        while i < len(lines) and (lines[i].startswith('[includeIf "gitdir:') or lines[i].strip().startswith("path = orca-bot.gitconfig")):
-            i += 1
-        while out and out[-1].strip() == "":
-            out.pop()
+        while managed_pair(i):
+            i += 2
+    else:
+        out.append(lines[i]); i += 1
         continue
-    out.append(lines[i]); i += 1
+    while out and out[-1].strip() == "":
+        out.pop()
 text = "\n".join(out).rstrip("\n")
 text = (text + "\n\n" if text else "") + block
 path.write_text(text)

@@ -44,7 +44,7 @@ rules() { grep -c '^\[includeIf "gitdir:' "$GC"; }
 # lowercase ~/projects exists → rule for it; re-run replaces the block (no duplicates)
 mkdir -p "$HOME/projects"
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
-[ "$(rules)" = 2 ] && grep -qF 'gitdir:~/projects/*/.git/worktrees/' "$GC" && [ "$(grep -c 'orca-bot identity' "$GC")" = 1 ] && ok "~/projects detected → its rule added, block replaced not duplicated" || bad "rules with ~/projects: $(grep -E 'includeIf|identity' "$GC" | tr '\n' ' ')"
+[ "$(rules)" = 2 ] && grep -qF 'gitdir:~/projects/*/.git/worktrees/' "$GC" && [ "$(grep -c '^# >>> orca-bot identity' "$GC")" = 1 ] && ok "~/projects detected → its rule added, block replaced not duplicated" || bad "rules with ~/projects: $(grep -E 'includeIf|identity' "$GC" | tr '\n' ' ')"
 # both spellings exist → both rules
 mkdir -p "$HOME/Projects"
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
@@ -55,6 +55,19 @@ mkdir -p "$HOME/Projects"
 # a linked worktree under the configured dir gets the bot identity
 mkdir -p "$HOME/code"; git init -q "$HOME/code/r" && git -C "$HOME/code/r" -c user.name=t -c user.email=t@x commit -q --allow-empty -m i && git -C "$HOME/code/r" worktree add -q "$HOME/code/r-wt" -b wt
 [ "$(git -C "$HOME/code/r-wt" config user.name)" = "B" ] && [ "$(git -C "$HOME/code/r" config user.name)" != "B" ] && ok "worktree under --projects-dir commits as the bot, main checkout does not" || bad "identity: wt=$(git -C "$HOME/code/r-wt" config user.name) main=$(git -C "$HOME/code/r" config user.name)"
+# Codex review of PR 15: an unrelated include right after the managed block must survive a re-run intact,
+# a comment inside the block must not orphan a path line, and a directory with config- or glob-special
+# characters is refused before the config is touched.
+printf '[includeIf "gitdir:~/elsewhere/"]\n\tpath = other.gitconfig\n' >> "$GC"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/code" >/dev/null 2>&1
+grep -qF '[includeIf "gitdir:~/elsewhere/"]' "$GC" && grep -qF 'path = other.gitconfig' "$GC" && [ "$(grep -c 'path = other.gitconfig' "$GC")" = 1 ] && ok "unrelated include after the block keeps its header and path" || bad "unrelated include damaged: $(grep -n -E 'includeIf|path =' "$GC" | tr '\n' ' ')"
+git config --file "$GC" --get-all includeIf.gitdir:~/elsewhere/.path >/dev/null && ok "config still parses after re-run" || bad "config no longer parses"
+before="$(cat "$GC")"
+for badd in "$HOME/ba\"d" "$HOME/code[1]" "$HOME/co*de"; do
+  "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
+  [ "$rc" = 2 ] || bad "special-char dir accepted (rc=$rc): $badd"
+done
+[ "$before" = "$(cat "$GC")" ] && ok "quote, bracket and star in --projects-dir are refused and the config is untouched" || bad "config changed by a refused --projects-dir"
 rmdir "$HOME/Projects"; "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1   # restore detection for the tests below
 
 # 3. keys set, switch on → gh runs with the token
