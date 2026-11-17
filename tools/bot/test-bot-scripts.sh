@@ -88,7 +88,8 @@ for badd in "$HOME/cleanalias" "$HOME/loop1" "$HOME/loop1/child" "$HOME/loop1/..
 done
 [ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "alias to a newline-named target and a symlink loop are refused after resolution, nothing written" || bad "config or keys changed by a refused resolved path"
 # Codex cycle 7: the older-Python fallback resolver must behave the same. AIDEV_FORCE_REALPATH_FALLBACK=1 selects it.
-for badd in "$HOME/loop1/child" "$HOME/loop1/../future"; do
+ln -sfn "$HOME/loop1/child" "$HOME/alias2"   # Codex cycle 8: an alias whose TARGET has a loop in an ancestor
+for badd in "$HOME/loop1/child" "$HOME/loop1/../future" "$HOME/alias2" "$HOME/alias2/deeper"; do
   AIDEV_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
   [ "$rc" = 2 ] || bad "fallback resolver accepted a loop (rc=$rc): $badd"
 done

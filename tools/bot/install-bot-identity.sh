@@ -69,22 +69,30 @@ def resolve(path):
         allow_missing = None
     if allow_missing is not None:
         return os.path.realpath(path, strict=allow_missing)
-    # Older Python: walk the RAW absolute path component by component, resolving
-    # symlinks as they appear (never normpath first, which would collapse ".."
-    # before the link it follows), and refuse any component that stays a link.
-    prefix = os.sep
-    for part in path.split(os.sep):
-        if part in ("", "."):
-            continue
-        if part == "..":
-            prefix = os.path.dirname(prefix) or os.sep
-            continue
-        candidate = os.path.join(prefix, part)
-        resolved = os.path.realpath(candidate)
-        if os.path.islink(resolved):
+    # Older Python: walk the RAW absolute path component by component. A symlink
+    # is followed by resolving its target with the same walk (so a loop anywhere
+    # in a target's ancestors is seen), ".." applies to the resolved prefix, and
+    # more than 40 link hops is a loop. Missing components are fine.
+    def walk(p, depth):
+        if depth > 40:
             raise OSError("symlink loop")
-        prefix = resolved
-    return prefix
+        prefix = os.sep
+        for part in p.split(os.sep):
+            if part in ("", "."):
+                continue
+            if part == "..":
+                prefix = os.path.dirname(prefix) or os.sep
+                continue
+            candidate = os.path.join(prefix, part)
+            if os.path.islink(candidate):
+                target = os.readlink(candidate)
+                if not os.path.isabs(target):
+                    target = os.path.join(prefix, target)
+                prefix = walk(target, depth + 1)
+            else:
+                prefix = candidate
+        return prefix
+    return walk(path, 0)
 try:
     real = resolve(raw)
 except OSError:
