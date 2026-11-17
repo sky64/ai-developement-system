@@ -68,6 +68,23 @@ for badd in "$HOME/ba\"d" "$HOME/code[1]" "$HOME/co*de"; do
   [ "$rc" = 2 ] || bad "special-char dir accepted (rc=$rc): $badd"
 done
 [ "$before" = "$(cat "$GC")" ] && ok "quote, bracket and star in --projects-dir are refused and the config is untouched" || bad "config changed by a refused --projects-dir"
+# Codex cycle 2: an unmatched begin marker must abort before any write; relative and
+# slash-heavy directories normalise to one absolute pattern; a legacy block followed by
+# a user include migrates with the user include intact.
+cp "$GC" "$TMP/gc.good"
+printf '# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>\n[includeIf "gitdir:~/x/*/.git/worktrees/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/elsewhere2/"]\n\tpath = other2.gitconfig\n[review]\n\tkeep = yes\n' > "$GC"
+cp "$GC" "$TMP/gc.unmatched"; k1="$(git config --global --get aidev.bot.tokenCommand)"
+"$BOT/install-bot-identity.sh" --name Z --email z@x --token-command "echo tok-Z" --projects-dir "$HOME/code" >/dev/null 2>&1; rc=$?
+cmp -s "$GC" "$TMP/gc.unmatched" && [ "$rc" != 0 ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k1" ] && ok "unmatched begin marker → non-zero exit, config and keys untouched" || bad "unmatched marker: rc=$rc changed=$(cmp -s "$GC" "$TMP/gc.unmatched" || echo yes)"
+cp "$TMP/gc.good" "$GC"
+( cd "$HOME" && "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir code >/dev/null 2>&1 )
+grep -qF 'gitdir:~/code/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:code/' "$GC" && ok "relative --projects-dir resolves to an absolute pattern" || bad "relative dir: $(grep includeIf "$GC" | tr '\n' ' ')"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/code///" >/dev/null 2>&1
+[ "$(grep -c 'gitdir:~/code/\*/.git/worktrees/' "$GC")" = 1 ] && ! grep -qF 'code///' "$GC" && [ "$(git -C "$HOME/code/r-wt" config user.name)" = "B" ] && ok "repeated trailing slashes normalise and the worktree still gets the bot" || bad "trailing slashes: $(grep includeIf "$GC" | tr '\n' ' ')"
+printf '[user]\n\tname = Owner\n\temail = owner@x\n\n# orca-bot identity (tools/bot/install-bot-identity.sh)\n[includeIf "gitdir:~/Projects/*/.git/worktrees/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/orca/workspaces/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/elsewhere/"]\n\tpath = other.gitconfig\n' > "$GC"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/code" >/dev/null 2>&1
+! grep -qF 'gitdir:~/Projects/' "$GC" && grep -qF 'gitdir:~/elsewhere/' "$GC" && grep -qF 'path = other.gitconfig' "$GC" && [ "$(grep -c '^# >>> orca-bot' "$GC")" = 1 ] && [ "$(grep -c '^# orca-bot identity (tools' "$GC")" = 0 ] && git config --file "$GC" --list >/dev/null && ok "legacy block migrates to markers; the user include after it survives" || bad "legacy migration: $(grep -n -E 'includeIf|identity|path' "$GC" | tr '\n' ' ')"
+git config --global --add aidev.trustedRoot "$R"   # the legacy-migration fixture replaced the global config; re-register the repo
 rmdir "$HOME/Projects"; "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1   # restore detection for the tests below
 
 # 3. keys set, switch on → gh runs with the token
