@@ -112,6 +112,17 @@ git config --global --unset-all aidev.trustedRoot 2>/dev/null || true; git confi
 bash "$ENABLE" "$R12" >/dev/null 2>&1
 [ "$(git config --global --get aidev.customSetting)" = "keep-me" ] && [ -z "$(git config --global --get-all aidev.trustedRoot)" ] && ok "moving the only legacy root keeps unrelated aidev.* keys" || bad "only-root move: customSetting=$(git config --global --get aidev.customSetting) aidev.trustedRoot=$(git config --global --get-all aidev.trustedRoot | tr '\n' ' ')"
 
+# Codex PR 16 cycle 2: a migration resumed after --no-commit must still commit the legacy deletion;
+# a legacy instruction already followed by the crew64 one is removed, not turned into a duplicate.
+R13="$TMP/r13"; newrepo "$R13"; mkdir -p "$R13/.claude"; cp "$DEFAULTS" "$R13/.claude/ai-dev-system.json"
+git -C "$R13" add .claude/ai-dev-system.json && git -C "$R13" commit -q -m "old config tracked"
+printf 'intro line\nIf you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.\nIf you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.\n' > "$R13/CLAUDE.md"
+git -C "$R13" add CLAUDE.md && git -C "$R13" commit -q -m "both lines"
+bash "$ENABLE" "$R13" --no-commit >/dev/null 2>&1
+bash "$ENABLE" "$R13" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && ! git -C "$R13" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && git -C "$R13" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && [ -z "$(git -C "$R13" status --porcelain)" ] && ok "migration resumed after --no-commit commits the legacy deletion" || bad "resumed migration: rc=$rc HEAD=$(git -C "$R13" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R13" status --porcelain | tr '\n' ' ')"
+[ "$(grep -c 'orchestrator skill at session start' "$R13/CLAUDE.md")" = 1 ] && grep -q 'crew64:orchestrator' "$R13/CLAUDE.md" && grep -q '^intro line$' "$R13/CLAUDE.md" && ok "legacy line next to an existing crew64 line is removed, not duplicated" || bad "dedupe: $(grep -c 'orchestrator skill' "$R13/CLAUDE.md") orchestrator lines"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

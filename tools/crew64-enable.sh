@@ -120,7 +120,11 @@ if [ -f "$repo/CLAUDE.md" ] && grep -qF "ai-dev-system:orchestrator" "$repo/CLAU
 import pathlib, re, sys
 p = pathlib.Path(sys.argv[1]); new = sys.argv[2]
 text = p.read_text()
-text = re.sub(r"^[^\n]*ai-dev-system:orchestrator[^\n]*$", lambda m: new, text, count=1, flags=re.M)
+if "crew64:orchestrator" in text:
+    # The new instruction is already there: drop the legacy line instead of duplicating.
+    text = re.sub(r"^[^\n]*ai-dev-system:orchestrator[^\n]*\n?", "", text, count=1, flags=re.M)
+else:
+    text = re.sub(r"^[^\n]*ai-dev-system:orchestrator[^\n]*$", lambda m: new, text, count=1, flags=re.M)
 p.write_text(text)
 PY
   echo "CLAUDE.md: legacy orchestrator line replaced"
@@ -155,7 +159,12 @@ fi
 # 4. Commit
 files=(.claude/settings.json .claude/crew64.json CLAUDE.md)
 git -C "$repo" add "${files[@]}"
-[ "$legacy_was_tracked" = 1 ] && files+=(.claude/ai-dev-system.json)   # the rename's deletion side belongs in the same commit
+# The rename's deletion side belongs in the same commit, also when a previous
+# --no-commit run already staged it (the file is then gone from the tree but
+# still present in HEAD).
+if [ "$legacy_was_tracked" = 1 ] || git -C "$repo" cat-file -e HEAD:.claude/ai-dev-system.json 2>/dev/null; then
+  files+=(.claude/ai-dev-system.json)
+fi
 if [ "$commit" = 1 ]; then
   if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
     echo "commit: nothing to commit"
