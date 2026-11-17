@@ -22,13 +22,13 @@ substitution, unterminated quotes and unknown operator runs are parse
 failures and deny.
 
 Switching off (decision 0005): features.orchestrator_guard in the MAIN
-checkout's .claude/ai-dev-system.json, or AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off
+checkout's .claude/crew64.json, or CREW64_FEATURE_ORCHESTRATOR_GUARD=off
 in the environment (ORCHESTRATOR_GUARD=off is the older alias). The env
 override wins over the file. A missing, unreadable or wrong-version config
 means the guard stays on. A worktree's own copy of the file is never read,
-and the config root is aidev_config.trusted_root: the main checkout that git
-state points at must also be registered as aidev.trustedRoot in the user's
-GLOBAL git config (harness-enable registers it). A worker that repoints its
+and the config root is crew64_config.trusted_root: the main checkout that git
+state points at must also be registered as crew64.trustedRoot in the user's
+GLOBAL git config (crew64-enable registers it). A worker that repoints its
 commondir, plants a repo, or turns its worktree into a standalone repo gets
 an unregistered root, so its config is ignored and the guard stays on. A worker that writes to the main checkout's
 file through Bash can still do so: that is the documented tripwire limit
@@ -47,9 +47,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    import aidev_config  # tools/aidev_config.py, the single config reader
+    import crew64_config  # tools/crew64_config.py, the single config reader
 except Exception:  # a broken or partial plugin install must not crash the guard open
-    aidev_config = None
+    crew64_config = None
 
 WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -385,7 +385,7 @@ def guard_switched_off(payload) -> bool:
 
     Any failure to read the config counts as "on": the guard fails closed.
     """
-    if aidev_config is None:
+    if crew64_config is None:
         # Reader unavailable: only the legacy human override applies; the file is not read.
         if os.environ.get("ORCHESTRATOR_GUARD", "").lower() == "off":
             sys.stderr.write("orchestrator-guard: off by config (environment)\n")
@@ -394,12 +394,12 @@ def guard_switched_off(payload) -> bool:
     cwd = payload.get("cwd") if isinstance(payload, dict) else None
     cwd = cwd if isinstance(cwd, str) and cwd else os.getcwd()
     try:
-        # trusted_root rejects a root a worker could have planted (see aidev_config).
-        root = aidev_config.trusted_root(cwd)
-        cfg = aidev_config.load_config(root)
-        if aidev_config.feature(cfg, "orchestrator_guard") is False:
-            from_env = aidev_config.feature(None, "orchestrator_guard") is False
-            source = "environment" if from_env else aidev_config.config_path(root)
+        # trusted_root rejects a root a worker could have planted (see crew64_config).
+        root = crew64_config.trusted_root(cwd)
+        cfg = crew64_config.load_config(root)
+        if crew64_config.feature(cfg, "orchestrator_guard") is False:
+            from_env = crew64_config.feature(None, "orchestrator_guard") is False
+            source = "environment" if from_env else crew64_config.config_path(root)
             sys.stderr.write(f"orchestrator-guard: off by config ({source})\n")
             return True
     except Exception:  # unreadable config or git: stay on

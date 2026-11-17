@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Unit test for tools/bot: the identity comes from the user's git config
-# (aidev.bot.*) and the repo's features.bot_identity switch (decision 0005).
+# (crew64.bot.*) and the repo's features.bot_identity switch (decision 0005).
 # Runs in a throwaway HOME with a fake gh. Exit 0 = all pass.
 set -u
 BOT="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$BOT/../.." && pwd)"
-DEFAULTS="$ROOT/config/ai-dev-system.defaults.json"
+DEFAULTS="$ROOT/config/crew64.defaults.json"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME/.local/bin" "$TMP/bin"
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -14,27 +14,32 @@ git config --global user.name Owner; git config --global user.email owner@x
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "${GH_TOKEN:-no-token}"\n' > "$TMP/bin/gh"; chmod +x "$TMP/bin/gh"
 export PATH="$TMP/bin:$PATH"
 R="$TMP/repo"; git init -q "$R" && git -C "$R" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
-git config --global --add aidev.trustedRoot "$R"   # decision 0005: the switch is read only from a registered root
+git config --global --add crew64.trustedRoot "$R"   # decision 0005: the switch is read only from a registered root
 fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 switch() { mkdir -p "$R/.claude"; python3 -I -c '
 import json,sys
 d=json.load(open(sys.argv[1])); d["features"]["bot_identity"]=(sys.argv[3]=="true")
-json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$R/.claude/ai-dev-system.json" "$1"; }
+json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$R/.claude/crew64.json" "$1"; }
 
 # 1. no keys yet, switch on → refuse naming the missing key
 switch true
 err="$(cd "$R" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
-[ "$rc" = 1 ] && case "$err" in *aidev.bot.name*) true;; *) false;; esac && ok "gh-bot without keys refuses, names aidev.bot.name" || bad "no keys: rc=$rc err=$err"
+[ "$rc" = 1 ] && case "$err" in *crew64.bot.name*) true;; *) false;; esac && ok "gh-bot without keys refuses, names crew64.bot.name" || bad "no keys: rc=$rc err=$err"
 
 # 2. install writes the keys; second run is idempotent
 out1="$("$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" 2>&1)"; rc1=$?
 out2="$("$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" 2>&1)"; rc2=$?
 [ "$rc1" = 0 ] && [ "$rc2" = 0 ] && case "$out2" in *"already present"*) true;; *) false;; esac && ok "install runs twice, second says already present" || bad "install: rc1=$rc1 rc2=$rc2 out2=$out2"
-got="$(git config --global --get aidev.bot.tokenCommand)"
-[ "$got" = "echo tok-1" ] && ok "aidev.bot.tokenCommand in global git config" || bad "tokenCommand: '$got'"
+got="$(git config --global --get crew64.bot.tokenCommand)"
+[ "$got" = "echo tok-1" ] && ok "crew64.bot.tokenCommand in global git config" || bad "tokenCommand: '$got'"
 grep -q 'name = B' "$XDG_CONFIG_HOME/git/orca-bot.gitconfig" && ok "orca-bot.gitconfig takes user.name from --name" || bad "orca-bot.gitconfig user.name"
+
+# 2a. decision 0006: legacy aidev.bot.* keys are removed when the installer writes crew64.bot.*
+git config --global aidev.bot.name Legacy; git config --global aidev.bot.tokenCommand "echo legacy"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
+[ -z "$(git config --global --get aidev.bot.name)" ] && [ -z "$(git config --global --get aidev.bot.tokenCommand)" ] && [ "$(git config --global --get crew64.bot.name)" = "B" ] && ok "installer removes legacy aidev.bot.* keys" || bad "legacy keys: aidev=$(git config --global --get aidev.bot.name) crew64=$(git config --global --get crew64.bot.name)"
 
 # 2b. the include rules follow the projects directories that exist, not a hard-coded ~/Projects
 GC="$XDG_CONFIG_HOME/git/config"
@@ -80,34 +85,34 @@ grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdi
 # Codex cycle 5: a clean alias whose TARGET ends in a newline (or a symlink loop) must be refused
 # after resolution, which means validating inside Python before the path crosses back into Bash.
 mkdir -p "$HOME/outer/bad"$'\n'; ln -sfn "$HOME/outer/bad"$'\n' "$HOME/cleanalias"; ln -sfn "$HOME/loop1" "$HOME/loop2"; ln -sfn "$HOME/loop2" "$HOME/loop1"
-before="$(cat "$GC")"; k0="$(git config --global --get aidev.bot.tokenCommand)"
+before="$(cat "$GC")"; k0="$(git config --global --get crew64.bot.tokenCommand)"
 mkdir -p "$HOME/future"   # Codex cycle 6: a loop in an ANCESTOR component must be refused too, with or without a .. after it
 for badd in "$HOME/cleanalias" "$HOME/loop1" "$HOME/loop1/child" "$HOME/loop1/../future"; do
   "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
   [ "$rc" = 2 ] || bad "resolved-path problem accepted (rc=$rc): $badd"
 done
-[ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "alias to a newline-named target and a symlink loop are refused after resolution, nothing written" || bad "config or keys changed by a refused resolved path"
-# Codex cycle 7: the older-Python fallback resolver must behave the same. AIDEV_FORCE_REALPATH_FALLBACK=1 selects it.
+[ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get crew64.bot.tokenCommand)" = "$k0" ] && ok "alias to a newline-named target and a symlink loop are refused after resolution, nothing written" || bad "config or keys changed by a refused resolved path"
+# Codex cycle 7: the older-Python fallback resolver must behave the same. CREW64_FORCE_REALPATH_FALLBACK=1 selects it.
 ln -sfn "$HOME/loop1/child" "$HOME/alias2"   # Codex cycle 8: an alias whose TARGET has a loop in an ancestor
 for badd in "$HOME/loop1/child" "$HOME/loop1/../future" "$HOME/alias2" "$HOME/alias2/deeper"; do
-  AIDEV_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
+  CREW64_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$badd" >/dev/null 2>&1; rc=$?
   [ "$rc" = 2 ] || bad "fallback resolver accepted a loop (rc=$rc): $badd"
 done
 [ "$before" = "$(cat "$GC")" ] && ok "fallback resolver refuses ancestor loops, nothing written" || bad "fallback resolver changed the config"
-AIDEV_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/link/../projects2" >/dev/null 2>&1
+CREW64_FORCE_REALPATH_FALLBACK=1 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/link/../projects2" >/dev/null 2>&1
 grep -qF 'gitdir:~/outer/projects2/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:~/projects2/' "$GC" && ok "fallback resolver follows the link before collapsing .." || bad "fallback link/..: $(grep includeIf "$GC" | tr '\n' ' ')"
 # Codex cycle 3: a trailing newline survives Bash's \$(...) stripping only if validated on the raw argument.
-k0="$(git config --global --get aidev.bot.tokenCommand)"; before="$(cat "$GC")"
+k0="$(git config --global --get crew64.bot.tokenCommand)"; before="$(cat "$GC")"
 "$BOT/install-bot-identity.sh" --name Q --email q@x --token-command "echo tok-Q" --projects-dir "$HOME/code"$'\n' >/dev/null 2>&1; rc=$?
-[ "$rc" = 2 ] && [ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k0" ] && ok "trailing newline in --projects-dir is refused before any write" || bad "trailing LF: rc=$rc config_changed=$([ "$before" = "$(cat "$GC")" ] || echo yes) key=$(git config --global --get aidev.bot.tokenCommand)"
+[ "$rc" = 2 ] && [ "$before" = "$(cat "$GC")" ] && [ "$(git config --global --get crew64.bot.tokenCommand)" = "$k0" ] && ok "trailing newline in --projects-dir is refused before any write" || bad "trailing LF: rc=$rc config_changed=$([ "$before" = "$(cat "$GC")" ] || echo yes) key=$(git config --global --get crew64.bot.tokenCommand)"
 # Codex cycle 2: an unmatched begin marker must abort before any write; relative and
 # slash-heavy directories normalise to one absolute pattern; a legacy block followed by
 # a user include migrates with the user include intact.
 cp "$GC" "$TMP/gc.good"
 printf '# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>\n[includeIf "gitdir:~/x/*/.git/worktrees/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/elsewhere2/"]\n\tpath = other2.gitconfig\n[review]\n\tkeep = yes\n' > "$GC"
-cp "$GC" "$TMP/gc.unmatched"; k1="$(git config --global --get aidev.bot.tokenCommand)"
+cp "$GC" "$TMP/gc.unmatched"; k1="$(git config --global --get crew64.bot.tokenCommand)"
 "$BOT/install-bot-identity.sh" --name Z --email z@x --token-command "echo tok-Z" --projects-dir "$HOME/code" >/dev/null 2>&1; rc=$?
-cmp -s "$GC" "$TMP/gc.unmatched" && [ "$rc" != 0 ] && [ "$(git config --global --get aidev.bot.tokenCommand)" = "$k1" ] && ok "unmatched begin marker → non-zero exit, config and keys untouched" || bad "unmatched marker: rc=$rc changed=$(cmp -s "$GC" "$TMP/gc.unmatched" || echo yes)"
+cmp -s "$GC" "$TMP/gc.unmatched" && [ "$rc" != 0 ] && [ "$(git config --global --get crew64.bot.tokenCommand)" = "$k1" ] && ok "unmatched begin marker → non-zero exit, config and keys untouched" || bad "unmatched marker: rc=$rc changed=$(cmp -s "$GC" "$TMP/gc.unmatched" || echo yes)"
 cp "$TMP/gc.good" "$GC"
 ( cd "$HOME" && "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir code >/dev/null 2>&1 )
 grep -qF 'gitdir:~/code/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:code/' "$GC" && ok "relative --projects-dir resolves to an absolute pattern" || bad "relative dir: $(grep includeIf "$GC" | tr '\n' ' ')"
@@ -116,7 +121,7 @@ grep -qF 'gitdir:~/code/*/.git/worktrees/' "$GC" && ! grep -qF 'gitdir:code/' "$
 printf '[user]\n\tname = Owner\n\temail = owner@x\n\n# orca-bot identity (tools/bot/install-bot-identity.sh)\n[includeIf "gitdir:~/Projects/*/.git/worktrees/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/orca/workspaces/"]\n\tpath = orca-bot.gitconfig\n[includeIf "gitdir:~/elsewhere/"]\n\tpath = other.gitconfig\n' > "$GC"
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" --projects-dir "$HOME/code" >/dev/null 2>&1
 ! grep -qF 'gitdir:~/Projects/' "$GC" && grep -qF 'gitdir:~/elsewhere/' "$GC" && grep -qF 'path = other.gitconfig' "$GC" && [ "$(grep -c '^# >>> orca-bot' "$GC")" = 1 ] && [ "$(grep -c '^# orca-bot identity (tools' "$GC")" = 0 ] && git config --file "$GC" --list >/dev/null && ok "legacy block migrates to markers; the user include after it survives" || bad "legacy migration: $(grep -n -E 'includeIf|identity|path' "$GC" | tr '\n' ' ')"
-git config --global --add aidev.trustedRoot "$R"   # the legacy-migration fixture replaced the global config; re-register the repo
+git config --global --add crew64.trustedRoot "$R"   # the legacy-migration fixture replaced the global config; re-register the repo
 rmdir "$HOME/Projects"; "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1   # restore detection for the tests below
 
 # 3. keys set, switch on → gh runs with the token
@@ -137,14 +142,14 @@ err="$(cd "$TMP" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
 [ "$rc" = 1 ] && case "$err" in *repository*) true;; *) false;; esac && ok "gh-bot refuses outside a repository" || bad "outside repo: rc=$rc err=$err"
 
 # 7. no config file at all → the switch defaults to off → refuse
-rm -f "$R/.claude/ai-dev-system.json"
+rm -f "$R/.claude/crew64.json"
 err="$(cd "$R" && "$BOT/gh-bot" x 2>&1 >/dev/null)"; rc=$?
 [ "$rc" = 1 ] && case "$err" in *bot_identity*) true;; *) false;; esac && ok "gh-bot refuses when no config file exists" || bad "no config: rc=$rc err=$err"
 
-# 8. a repo-local aidev.bot.* value is ignored: only the global config is trusted
+# 8. a repo-local crew64.bot.* value is ignored: only the global config is trusted
 switch true
-git -C "$R" config aidev.bot.tokenCommand 'echo INJECTED'
-git -C "$R" config aidev.bot.name 'Mallory'
+git -C "$R" config crew64.bot.tokenCommand 'echo INJECTED'
+git -C "$R" config crew64.bot.name 'Mallory'
 out="$(cd "$R" && "$BOT/gh-bot" x 2>/dev/null)"; rc=$?
 [ "$rc" = 0 ] && [ "$out" = "tok-1" ] && ok "repo-local tokenCommand is ignored (global wins)" || bad "repo-local override: rc=$rc out=$out"
 out="$(cd "$R" && printf 'host=github.com\n\n' | "$BOT/git-credential-op-bot" get 2>/dev/null)"

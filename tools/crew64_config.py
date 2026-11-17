@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""The single reader of .claude/ai-dev-system.json (decision 0005).
+"""The single reader of .claude/crew64.json (decision 0005).
 
 Importable by the guard hook, callable as a CLI by the bot scripts and the
 orchestrator. Standard library only.
 
-    python3 -I tools/aidev_config.py get <dotted.key>   value, or exit 1
-    python3 -I tools/aidev_config.py status              one status line
-    python3 -I tools/aidev_config.py check <path>        validate, exit 1 + reasons
+    python3 -I tools/crew64_config.py get <dotted.key>   value, or exit 1
+    python3 -I tools/crew64_config.py status              one status line
+    python3 -I tools/crew64_config.py check <path>        validate, exit 1 + reasons
 
 Rules:
 - The config is read from the MAIN checkout (parent of the git common dir),
   never from a worktree's branch, and only when that checkout is registered
-  as aidev.trustedRoot in the user's GLOBAL git config (harness-enable adds
+  as crew64.trustedRoot in the user's GLOBAL git config (crew64-enable adds
   it), so a worker cannot flip a switch on itself by editing git state.
 - Missing, unreadable, non-object or wrong-version files count as absent and
   every reader falls back to the shipped defaults (fail closed for the guard).
-- Environment overrides AI_DEV_SYSTEM_FEATURE_<NAME>=on|off beat the file;
+- Environment overrides CREW64_FEATURE_<NAME>=on|off beat the file;
   ORCHESTRATOR_GUARD=off is an alias for the orchestrator_guard switch.
 """
 import json
@@ -23,16 +23,16 @@ import os
 import subprocess
 import sys
 
-CONFIG_REL = os.path.join(".claude", "ai-dev-system.json")
+CONFIG_REL = os.path.join(".claude", "crew64.json")
 VERSION = 1
 BOOL_FEATURES = ("orchestrator_guard", "model_ladder", "bot_identity", "build_map")
 METERING_KINDS = ("none", "solvela", "openai-compatible")
-ENV_PREFIX = "AI_DEV_SYSTEM_FEATURE_"
+ENV_PREFIX = "CREW64_FEATURE_"
 
 
 def _defaults_path() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(os.path.dirname(here), "config", "ai-dev-system.defaults.json")
+    return os.path.join(os.path.dirname(here), "config", "crew64.defaults.json")
 
 
 def defaults() -> dict:
@@ -100,12 +100,12 @@ def candidate_root(cwd: str):
 
 def registered_roots():
     """Main checkouts registered as trusted in the user's GLOBAL git config
-    (aidev.trustedRoot, multi-valued; harness-enable adds the entry). The
+    (crew64.trustedRoot, multi-valued; crew64-enable adds the entry). The
     global config is the pin outside any file a worker can edit in its
     worktree; a worker that rewrites it through Bash is the tripwire limit."""
     try:
         out = subprocess.run(
-            ["git", "config", "--global", "--get-all", "aidev.trustedRoot"],
+            ["git", "config", "--global", "--get-all", "crew64.trustedRoot"],
             capture_output=True, text=True, check=False, timeout=5,
         )
     except (OSError, subprocess.SubprocessError):
@@ -219,7 +219,7 @@ def status_line(cfg, cwd: str) -> str:
     devs = deviations(eff, base) if cfg is not None else []
     models = "defaults" if not devs else "deviates: " + ",".join(devs)
     return (
-        f"ai-dev-system: config={path}"
+        f"crew64: config={path}"
         f" guard={_onoff(feature(cfg, 'orchestrator_guard'))}"
         f" ladder={_onoff(feature(cfg, 'model_ladder'))}"
         f" bot={_onoff(feature(cfg, 'bot_identity'))}"
@@ -310,14 +310,14 @@ def cli(argv) -> int:
         if key.startswith("features."):
             value = feature(cfg, key[len("features."):])
             if value is None:
-                sys.stderr.write(f"aidev_config: unknown feature {key}\n")
+                sys.stderr.write(f"crew64_config: unknown feature {key}\n")
                 return 1
             _print_value(value)
             return 0
         try:
             _print_value(_get(cfg if cfg is not None else defaults(), key))
         except KeyError:
-            sys.stderr.write(f"aidev_config: no such key {key}\n")
+            sys.stderr.write(f"crew64_config: no such key {key}\n")
             return 1
         return 0
     if cmd == "check" and len(argv) == 2:

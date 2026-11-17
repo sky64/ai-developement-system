@@ -185,15 +185,15 @@ raw 2 "Bash with null command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_in
 raw 2 "Bash with list command" "{\"tool_name\":\"Bash\",\"cwd\":\"$M\",\"tool_input\":{\"command\":[\"ls\"]}}"
 
 # Plugin wiring: run the exact command from hooks/hooks.json, with the plugin
-# Decision 0005: features.orchestrator_guard in .claude/ai-dev-system.json,
+# Decision 0005: features.orchestrator_guard in .claude/crew64.json,
 # read from the MAIN checkout, with env overrides. cfg <dir> <true|false>
 # writes the shipped defaults with the guard switch set.
-DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/config/ai-dev-system.defaults.json"
-git config --global --add aidev.trustedRoot "$TMP/main"   # decision 0005: only a registered main checkout may govern
+DEFAULTS="$(cd "$(dirname "$0")/../.." && pwd)/config/crew64.defaults.json"
+git config --global --add crew64.trustedRoot "$TMP/main"   # decision 0005: only a registered main checkout may govern
 cfg() { mkdir -p "$1/.claude"; python3 -I -c '
 import json,sys
 d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=(sys.argv[3]=="true")
-json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$1/.claude/ai-dev-system.json" "$2"; }
+json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$1/.claude/crew64.json" "$2"; }
 runenv() { # VAR=value expected_exit cwd tool json_input
   local envpair="$1" exp="$2" cwd="$3" tool="$4" input="$5"
   printf '{"tool_name":"%s","cwd":"%s","tool_input":%s}' "$tool" "$cwd" "$input" \
@@ -208,17 +208,17 @@ case "$err" in "orchestrator-guard: off by config"*) echo "ok   off-by-config pr
 cfg "$M" true; cfg "$W" false
 run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"             # worktree copy ignored, main copy on
 rm -rf "$W/.claude"
-printf 'not json' > "$M/.claude/ai-dev-system.json"
+printf 'not json' > "$M/.claude/crew64.json"
 run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # malformed → guard on
-cfg "$M" false; sed -i 's/"version": 1/"version": 2/' "$M/.claude/ai-dev-system.json"
+cfg "$M" false; sed -i 's/"version": 1/"version": 2/' "$M/.claude/crew64.json"
 run 2 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # wrong version → guard on
 cfg "$M" false
-runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on  2 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env beats file
-rm -f "$M/.claude/ai-dev-system.json"
-runenv AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env alone turns off
-# The new variable beats the legacy alias, in the hook as in aidev_config.
+runenv CREW64_FEATURE_ORCHESTRATOR_GUARD=on  2 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env beats file
+rm -f "$M/.claude/crew64.json"
+runenv CREW64_FEATURE_ORCHESTRATOR_GUARD=off 0 "$M" Write '{"file_path":"x.md","content":"hi"}'  # env alone turns off
+# The new variable beats the legacy alias, in the hook as in crew64_config.
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
-  | env ORCHESTRATOR_GUARD=off AI_DEV_SYSTEM_FEATURE_ORCHESTRATOR_GUARD=on python3 -I "$HOOK" 2>/dev/null; got=$?
+  | env ORCHESTRATOR_GUARD=off CREW64_FEATURE_ORCHESTRATOR_GUARD=on python3 -I "$HOOK" 2>/dev/null; got=$?
 [ "$got" = 2 ] && echo "ok   exit 2  [legacy off + new on] new variable wins" || { echo "FAIL exit $got (want 2) legacy off + new on"; fail=1; }
 # A worktree whose commondir has been repointed at a repo INSIDE the worktree
 # (planted by a worker) must not be able to switch the guard off: a config root
@@ -257,13 +257,13 @@ cp "$TMP/commondir4.bak" "$ADMIN/commondir"
 M2="$TMP/main2"; git init -q "$M2" && git -C "$M2" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
 cfg "$M2" false
 run 2 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # unregistered main: guard on
-git config --global --add aidev.trustedRoot "$M2"
+git config --global --add crew64.trustedRoot "$M2"
 run 0 "$M2" Write  '{"file_path":"x.md","content":"hi"}'                      # registered: switch honoured
-# A hook that cannot import aidev_config must still deny (never crash open).
+# A hook that cannot import crew64_config must still deny (never crash open).
 mkdir -p "$TMP/alone/hooks" && cp "$HOOK" "$TMP/alone/hooks/orchestrator-guard.py"
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
   | ORCHESTRATOR_GUARD= python3 -I "$TMP/alone/hooks/orchestrator-guard.py" 2>/dev/null; got=$?
-[ "$got" = 2 ] && echo "ok   exit 2  hook without aidev_config denies" || { echo "FAIL exit $got (want 2) hook without aidev_config"; fail=1; }
+[ "$got" = 2 ] && echo "ok   exit 2  hook without crew64_config denies" || { echo "FAIL exit $got (want 2) hook without crew64_config"; fail=1; }
 
 # root variable set the way Claude Code sets it, in the main checkout.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

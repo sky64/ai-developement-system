@@ -10,7 +10,7 @@
 # file is written; on any problem the script exits non-zero and changes nothing.
 #
 # Writes (decision 0005):
-# - aidev.bot.name, aidev.bot.email and aidev.bot.tokenCommand in the user's
+# - crew64.bot.name, crew64.bot.email and crew64.bot.tokenCommand in the user's
 #   global git config, read by gh-bot and git-credential-op-bot from any cwd;
 # - orca-bot.gitconfig (user.name/user.email from the flags plus the
 #   credential helper) and one marked includeIf block in the XDG git config
@@ -65,7 +65,7 @@ raw = sys.argv[1]
 def resolve(path):
     """Real path with missing components allowed; raise OSError on a symlink loop anywhere."""
     allow_missing = getattr(os.path, "ALLOW_MISSING", None)
-    if os.environ.get("AIDEV_FORCE_REALPATH_FALLBACK") == "1":  # tests exercise the older-Python branch
+    if os.environ.get("CREW64_FORCE_REALPATH_FALLBACK") == "1":  # tests exercise the older-Python branch
         allow_missing = None
     if allow_missing is not None:
         return os.path.realpath(path, strict=allow_missing)
@@ -197,9 +197,11 @@ cat > "$cfg/orca-bot.gitconfig" <<CFG
 	helper =
 	helper = !$HOME/.local/bin/git-credential-op-bot
 CFG
-git config --global aidev.bot.name "$name"
-git config --global aidev.bot.email "$email"
-git config --global aidev.bot.tokenCommand "$token_cmd"
+git config --global crew64.bot.name "$name"
+git config --global crew64.bot.email "$email"
+git config --global crew64.bot.tokenCommand "$token_cmd"
+# Decision 0006: the keys used to live under aidev.*; drop them so one name remains.
+git config --global --remove-section aidev.bot 2>/dev/null || true
 existing=""; [ -f "$cfg/config" ] && existing="$(cat "$cfg/config")"
 newcfg="$(compute_config)" || exit 1
 if [ "$newcfg" = "$existing" ]; then
@@ -208,4 +210,4 @@ else
   printf '%s\n' "$newcfg" > "$cfg/config"
   echo "wrote includeIf block to $cfg/config for: ${projects_dirs[*]:-(no projects dir)} and ~/orca/workspaces"
 fi
-echo "wrote aidev.bot.* to the global git config and $cfg/orca-bot.gitconfig; symlinked git-credential-op-bot and gh-bot into ~/.local/bin"
+echo "wrote crew64.bot.* to the global git config and $cfg/orca-bot.gitconfig; symlinked git-credential-op-bot and gh-bot into ~/.local/bin"
