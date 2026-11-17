@@ -181,7 +181,17 @@ sys.stdout.write(text)
 PY
 }
 
-# Validate the marker structure before any write.
+# Validate the marker structure before any write, including the legacy-key
+# removal below: a malformed file must leave even the old keys untouched.
+compute_config >/dev/null || exit 1
+# Decision 0006: the keys used to live under aidev.*; drop them so one name
+# remains. Unset key by key: `git config --remove-section` also deletes the
+# comment lines that follow a section, which once took this script's own
+# begin marker with it. Then validate again, so the block is computed from the
+# file exactly as it will be written.
+for legacy_key in aidev.bot.name aidev.bot.email aidev.bot.tokenCommand; do
+  git config --global --unset-all "$legacy_key" 2>/dev/null || true
+done
 compute_config >/dev/null || exit 1
 
 # All inputs validated and the new config computed: now write.
@@ -200,8 +210,6 @@ CFG
 git config --global crew64.bot.name "$name"
 git config --global crew64.bot.email "$email"
 git config --global crew64.bot.tokenCommand "$token_cmd"
-# Decision 0006: the keys used to live under aidev.*; drop them so one name remains.
-git config --global --remove-section aidev.bot 2>/dev/null || true
 existing=""; [ -f "$cfg/config" ] && existing="$(cat "$cfg/config")"
 newcfg="$(compute_config)" || exit 1
 if [ "$newcfg" = "$existing" ]; then

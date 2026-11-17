@@ -41,6 +41,29 @@ git config --global aidev.bot.name Legacy; git config --global aidev.bot.tokenCo
 "$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1
 [ -z "$(git config --global --get aidev.bot.name)" ] && [ -z "$(git config --global --get aidev.bot.tokenCommand)" ] && [ "$(git config --global --get crew64.bot.name)" = "B" ] && ok "installer removes legacy aidev.bot.* keys" || bad "legacy keys: aidev=$(git config --global --get aidev.bot.name) crew64=$(git config --global --get crew64.bot.name)"
 
+# 2a2. a legacy [aidev "bot"] section sitting right above the marked block must not take the begin
+# marker with it when it is removed (git deletes a section's trailing comment lines too).
+printf '[aidev "bot"]\n\tname = Legacy\n\ttokenCommand = echo legacy\n\n' > "$TMP/legacy-section"
+python3 -I - "$GIT_CONFIG_GLOBAL" "$TMP/legacy-section" <<'PY'
+import pathlib, sys
+gc, sec = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]).read_text()
+text = gc.read_text()
+marker = "# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>"
+assert marker in text
+gc.write_text(text.replace(marker, sec + marker, 1))
+PY
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && [ "$(grep -c '^# >>> orca-bot identity' "$GIT_CONFIG_GLOBAL")" = 1 ] && [ "$(grep -c '^# <<< orca-bot identity' "$GIT_CONFIG_GLOBAL")" = 1 ] && [ -z "$(git config --global --get aidev.bot.name)" ] && ok "legacy section above the block is removed without losing the begin marker" || bad "legacy-above-block: rc=$rc begin=$(grep -c '^# >>> orca-bot' "$GIT_CONFIG_GLOBAL") end=$(grep -c '^# <<< orca-bot' "$GIT_CONFIG_GLOBAL") aidev=$(git config --global --get aidev.bot.name)"
+
+# 2a3. Codex PR 17: with a malformed marker AND legacy keys, nothing may change, including the legacy keys.
+cp "$GIT_CONFIG_GLOBAL" "$TMP/gc.before-malformed"
+git config --global aidev.bot.name Legacy2
+printf '# >>> orca-bot identity (tools/bot/install-bot-identity.sh) >>>\n[includeIf "gitdir:~/zzz/*/.git/worktrees/"]\n\tpath = orca-bot.gitconfig\n' >> "$GIT_CONFIG_GLOBAL"   # second begin, no end
+cp "$GIT_CONFIG_GLOBAL" "$TMP/gc.malformed"
+"$BOT/install-bot-identity.sh" --name B --email e@x --token-command "echo tok-1" >/dev/null 2>&1; rc=$?
+[ "$rc" != 0 ] && cmp -s "$GIT_CONFIG_GLOBAL" "$TMP/gc.malformed" && [ "$(git config --global --get aidev.bot.name)" = "Legacy2" ] && ok "malformed marker with legacy keys: non-zero exit and the config, legacy keys included, is byte-identical" || bad "malformed+legacy: rc=$rc identical=$(cmp -s "$GIT_CONFIG_GLOBAL" "$TMP/gc.malformed" && echo yes || echo no) aidev=$(git config --global --get aidev.bot.name)"
+cp "$TMP/gc.before-malformed" "$GIT_CONFIG_GLOBAL"   # restore a valid config for the tests below
+
 # 2b. the include rules follow the projects directories that exist, not a hard-coded ~/Projects
 GC="$XDG_CONFIG_HOME/git/config"
 rules() { grep -c '^\[includeIf "gitdir:' "$GC"; }
