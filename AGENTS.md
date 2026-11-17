@@ -34,7 +34,7 @@ There is no application build or package dependency installation at present.
 - Run `git diff --check` for changes.
 - Run `bash -n` for shell scripts under tools/ and `python3 -m py_compile tools/hooks/orchestrator-guard.py` when they change.
 - Run `bash tools/hooks/test-orchestrator-guard.sh`.
-- Run `bash tools/test-aidev-config.sh`, `bash tools/bot/test-bot-scripts.sh` and `bash tools/test-harness-enable.sh` when the config reader, the bot scripts or harness-enable change.
+- Run `bash tools/test-crew64-config.sh`, `bash tools/bot/test-bot-scripts.sh` and `bash tools/test-crew64-enable.sh` when the config reader, the bot scripts or harness-enable change.
 - Run `claude plugin validate .` when plugin files change.
 - Run `bash tools/check-ladder-docs.sh` when the ladder, templates or the orchestrator skill change.
 - Check changed Markdown links and code fences.
@@ -43,7 +43,7 @@ There is no application build or package dependency installation at present.
 ## Credentials and external actions
 
 - Do not print secrets, read credential values, copy personal authentication into worktrees, or commit audit output without review.
-- Agent worktrees commit and push as the agent identity installed in the user's git config by `tools/bot/install-bot-identity.sh` (`aidev.bot.name`, `aidev.bot.tokenCommand`) and enabled per repository by `features.bot_identity` in `.claude/ai-dev-system.json`: a Git identity include scoped to linked worktrees and a credential helper that runs the token command at push time. The owner's own gh login is never used for agent pushes. The owner's values are recorded in docs/12-orca-setup.md.
+- Agent worktrees commit and push as the agent identity installed in the user's git config by `tools/bot/install-bot-identity.sh` (`crew64.bot.name`, `crew64.bot.tokenCommand`) and enabled per repository by `features.bot_identity` in `.claude/crew64.json`: a Git identity include scoped to linked worktrees and a credential helper that runs the token command at push time. The owner's own gh login is never used for agent pushes. The owner's values are recorded in docs/12-orca-setup.md.
 - Prepare reversible project changes within the user's request. Do not install global tooling, remove custom files, or change shared machine settings without authorization.
 - Merge and production deployment are performed by the agent identity, not the owner, where `features.bot_identity` is on, only after the independent Codex review is clean and the orchestrator has verified it. This is a standing authorization from the owner, who may revoke or narrow it at any time ([decision](docs/decisions/2026-10-25-agent-merge-and-deploy.md)). Where branch protection requires an approving review the agent cannot give itself, the merge waits for a human approval.
 - New paid services, permission changes, external communications, and credential changes require explicit per-case authorization.

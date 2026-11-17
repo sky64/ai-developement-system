@@ -6,7 +6,7 @@ description: >-
   including hook scripts. Use this agent for that work instead of
   general-purpose. Pairs with reviewer: Codex (Orca worker).
   Skills: git-workflow, coding-standards, only if the project provides them.
-  Owner: ai-dev-system plugin.
+  Owner: crew64 plugin.
 tools: Read, Write, Edit, Bash, Grep, Glob, Skill
 ---
 

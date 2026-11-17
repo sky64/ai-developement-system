@@ -8,12 +8,12 @@ Status: the manifests validate statically and the hook command passes a simulate
 
 | Path | Component | Purpose |
 |---|---|---|
-| `.claude-plugin/plugin.json` | Manifest | Name `ai-dev-system`, version `0.2.0` |
+| `.claude-plugin/plugin.json` | Manifest | Name `crew64`, version `0.2.0` |
 | `.claude-plugin/marketplace.json` | Marketplace | One-plugin catalog whose plugin source is the repository root (`"./"`) |
 | `hooks/hooks.json` | Hook | The PreToolUse write guard, same matcher and timeout as `.claude/settings.json`, path through `${CLAUDE_PLUGIN_ROOT}` |
 | `agents/docs-engineer.md` | Agent | Role prompt for documentation and tooling work, usable in a repository that has none of this repository's files |
 | `agents/specialist-agent.md.tmpl` | Template | The template from [05-delegation.md](05-delegation.md), not a runnable agent |
-| `skills/orchestrator/SKILL.md` | Skill | Makes the session the orchestrator; runs as `/ai-dev-system:orchestrator` |
+| `skills/orchestrator/SKILL.md` | Skill | Makes the session the orchestrator; runs as `/crew64:orchestrator` |
 | `tools/hooks/orchestrator-guard.py` | Script | The guard, unchanged |
 
 `AGENTS.md`, `docs/05-delegation.md` and the rest of the repository ship inside the plugin directory; the skill reads them through `${CLAUDE_PLUGIN_ROOT}`. `.claude/` in this repository is not part of the plugin (the plugin loads `agents/`, `skills/` and `hooks/` at the plugin root), so this repository's own `.claude/agents/docs-engineer.md` and `.claude/skills/` stay as they are.
@@ -25,17 +25,17 @@ Add these lines to the application repository's `.claude/settings.json` and comm
 ```json
 {
   "extraKnownMarketplaces": {
-    "ai-dev-system": {
-      "source": { "source": "github", "repo": "sky64/ai-developement-system" }
+    "crew64": {
+      "source": { "source": "github", "repo": "sky64/crew64" }
     }
   },
   "enabledPlugins": {
-    "ai-dev-system@ai-dev-system": true
+    "crew64@crew64": true
   }
 }
 ```
 
-The key `ai-dev-system@ai-dev-system` is `<plugin>@<marketplace>`. Claude Code honors `extraKnownMarketplaces` from a repository only after the workspace trust dialog is accepted for that folder; in an untrusted folder it ignores the entry without a message.
+The key `crew64@crew64` is `<plugin>@<marketplace>`. Claude Code honors `extraKnownMarketplaces` from a repository only after the workspace trust dialog is accepted for that folder; in an untrusted folder it ignores the entry without a message.
 
 ### Why `marketplace.json` is needed
 
@@ -50,16 +50,16 @@ The key `ai-dev-system@ai-dev-system` is `<plugin>@<marketplace>`. Claude Code h
 Documented in [Create a plugin](https://code.claude.com/docs/en/plugins/create.md), without any settings file:
 
 ```bash
-claude --plugin-dir /path/to/ai-developement-system
+claude --plugin-dir /path/to/crew64
 ```
 
-The flag loads the directory for one session and writes nothing to settings. A local directory marketplace (`claude plugin marketplace add /path/to/ai-developement-system`, then `claude plugin install ai-dev-system@ai-dev-system`) loads the plugin in place, so edits apply at the next session start or `/reload-plugins`. Both are documented; neither was run here.
+The flag loads the directory for one session and writes nothing to settings. A local directory marketplace (`claude plugin marketplace add /path/to/crew64`, then `claude plugin install crew64@crew64`) loads the plugin in place, so edits apply at the next session start or `/reload-plugins`. Both are documented; neither was run here.
 
 ## Orca project setup
 
 1. Register the application repository with Orca (`orca repo add --path <repo>`) and set its base ref (`orca repo set-base-ref --repo path:<repo> --ref origin/main`).
 2. Enable the plugin in the application repository's `.claude/settings.json` as above and add the orchestrator line to its `CLAUDE.md` (next section). Start the orchestrator session in the repository's main checkout from Orca.
-3. The orchestrator starts implementers and reviewers as Orca workers in their own worktrees, following `orca skills get orca-cli` and `orca skills get orchestration`. Where `features.bot_identity` is on in `.claude/ai-dev-system.json`, agent worktrees commit and push as the agent identity installed in your global git config by `tools/bot/install-bot-identity.sh` (the owner's values are in [12-orca-setup.md](12-orca-setup.md)).
+3. The orchestrator starts implementers and reviewers as Orca workers in their own worktrees, following `orca skills get orca-cli` and `orca skills get orchestration`. Where `features.bot_identity` is on in `.claude/crew64.json`, agent worktrees commit and push as the agent identity installed in your global git config by `tools/bot/install-bot-identity.sh` (the owner's values are in [12-orca-setup.md](12-orca-setup.md)).
 4. Protect `main` in the application repository the way [09-agent-identity.md](09-agent-identity.md) describes for this repository (one approving review, admin enforcement, no force pushes).
 
 Orca launches the real Claude Code binary on this machine with the user's configuration, so a committed `extraKnownMarketplaces` entry is expected to apply once the folder is trusted. This is untested; see [Verification](#verification).
@@ -71,7 +71,7 @@ Orca launches the real Claude Code binary on this machine with the user's config
 | Application-specific agents (for example a money-path engineer) | The application repository, `.claude/agents/<name>.md` |
 | Role templates and the shared docs-engineer | This plugin repository, `agents/` |
 
-The specialist selection step in [05-delegation.md](05-delegation.md) searches the application's `.claude/` first. Plugin agents are namespaced: the docs-engineer is `ai-dev-system:docs-engineer` ([Add components](https://code.claude.com/docs/en/plugins/components.md)). Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` frontmatter, so an agent that needs those belongs in the application repository.
+The specialist selection step in [05-delegation.md](05-delegation.md) searches the application's `.claude/` first. Plugin agents are namespaced: the docs-engineer is `crew64:docs-engineer` ([Add components](https://code.claude.com/docs/en/plugins/components.md)). Plugin agents ignore `hooks`, `mcpServers` and `permissionMode` frontmatter, so an agent that needs those belongs in the application repository.
 
 `agents/specialist-agent.md.tmpl` is a template. The component documentation says each Markdown file under `agents/` defines an agent, and the manifest reference says `agents` entries must be `.md` files. A `.tmpl` file is not a Markdown file, so it is expected not to register. The documentation does not state an extension rule outright, and the check was not made in a live session (untested).
 
@@ -80,7 +80,7 @@ The specialist selection step in [05-delegation.md](05-delegation.md) searches t
 A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`. Every session in the project reads that file, including workers, so the line is scoped to the orchestrator:
 
 ```markdown
-If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the ai-dev-system:orchestrator skill at session start. A session whose prompt assigns it a child role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.
+If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a child role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.
 ```
 
 A spawn prompt must name the child role explicitly (for example "You are the implementer"), otherwise the child may read the line above as applying to it. The skill also tells a session with an explicitly assigned child role to keep that role.

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Unit test for tools/aidev_config.py: the single reader of
-# .claude/ai-dev-system.json. Runs against a throwaway repo and a worktree.
+# Unit test for tools/crew64_config.py: the single reader of
+# .claude/crew64.json. Runs against a throwaway repo and a worktree.
 # Exit 0 = all pass.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-MOD="$ROOT/tools/aidev_config.py"
-DEFAULTS="$ROOT/config/ai-dev-system.defaults.json"
+MOD="$ROOT/tools/crew64_config.py"
+DEFAULTS="$ROOT/config/crew64.defaults.json"
 EXAMPLE="$ROOT/config/examples/orca-solvela.json"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
-git config --global --add aidev.trustedRoot "$TMP/main"
+git config --global --add crew64.trustedRoot "$TMP/main"
 git -C "$TMP" init -q main && git -C "$TMP/main" commit -q --allow-empty -m init
 git -C "$TMP/main" worktree add -q "$TMP/wt" -b wt
 M="$TMP/main"; W="$TMP/wt"
@@ -21,7 +21,7 @@ run()  { (cd "$1" && shift && python3 -I "$MOD" "$@" 2>&1); }
 setfeat() { # <value-json> <feature> : write defaults with features.<feature> = value
   mkdir -p "$M/.claude"; python3 -I -c '
 import json,sys
-d=json.load(open(sys.argv[1])); d["features"][sys.argv[3]]=json.loads(sys.argv[2]); json.dump(d,open(sys.argv[4],"w"))' "$DEFAULTS" "$1" "$2" "$M/.claude/ai-dev-system.json"; }
+d=json.load(open(sys.argv[1])); d["features"][sys.argv[3]]=json.loads(sys.argv[2]); json.dump(d,open(sys.argv[4],"w"))' "$DEFAULTS" "$1" "$2" "$M/.claude/crew64.json"; }
 
 # 1. status without a config: defaults, config=none
 out="$(run "$M" status)"
@@ -32,9 +32,9 @@ out="$(run "$M" get features.model_ladder)"; rc=$?
 [ "$rc" = 0 ] && [ "$out" = "true" ] && ok "get features.model_ladder without config → true" || bad "get without config: rc=$rc out=$out"
 
 # 3. status from a worktree names the main checkout's file
-mkdir -p "$M/.claude" && cp "$DEFAULTS" "$M/.claude/ai-dev-system.json" 2>/dev/null
+mkdir -p "$M/.claude" && cp "$DEFAULTS" "$M/.claude/crew64.json" 2>/dev/null
 out="$(run "$W" status)"
-case "$out" in *"config=$M/.claude/ai-dev-system.json"*) ok "status from worktree reads main checkout";; *) bad "status from worktree: $out";; esac
+case "$out" in *"config=$M/.claude/crew64.json"*) ok "status from worktree reads main checkout";; *) bad "status from worktree: $out";; esac
 
 # 4. check accepts the shipped defaults
 out="$(run "$M" check "$DEFAULTS")"; rc=$?
@@ -51,15 +51,15 @@ out="$(run "$M" check "$TMP/nofeat.json")"; rc=$?
 [ "$rc" = 1 ] && case "$out" in *features*) true;; *) false;; esac && ok "check without features → exit 1 names features" || bad "check nofeat: rc=$rc out=$out"
 
 # 7. env override beats the file
-out="$(cd "$M" && AI_DEV_SYSTEM_FEATURE_MODEL_LADDER=off python3 -I "$MOD" get features.model_ladder 2>&1)"
-[ "$out" = "false" ] && ok "AI_DEV_SYSTEM_FEATURE_MODEL_LADDER=off → false" || bad "env override: $out"
+out="$(cd "$M" && CREW64_FEATURE_MODEL_LADDER=off python3 -I "$MOD" get features.model_ladder 2>&1)"
+[ "$out" = "false" ] && ok "CREW64_FEATURE_MODEL_LADDER=off → false" || bad "env override: $out"
 
 # 8. ORCHESTRATOR_GUARD=off alias
 out="$(cd "$M" && ORCHESTRATOR_GUARD=off python3 -I "$MOD" get features.orchestrator_guard 2>&1)"
 [ "$out" = "false" ] && ok "ORCHESTRATOR_GUARD=off → orchestrator_guard false" || bad "guard alias: $out"
 
 # 9. deviation from defaults is reported
-python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["models"]["research"][2]="claude-haiku-5-5"; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M/.claude/ai-dev-system.json" 2>/dev/null
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["models"]["research"][2]="claude-haiku-5-5"; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M/.claude/crew64.json" 2>/dev/null
 out="$(run "$M" status)"
 case "$out" in *"models=deviates: models.research"*) ok "status reports models deviation";; *) bad "deviation: $out";; esac
 
@@ -76,29 +76,29 @@ out="$(run "$M" get features.model_ladder)"; [ "$out" = "true" ] && ok "features
 
 # 13. the CLI applies the same trusted-root rule as the hook: a planted repo
 # inside the worktree, pointed at by commondir, is not a config source.
-cp "$DEFAULTS" "$M/.claude/ai-dev-system.json"
+cp "$DEFAULTS" "$M/.claude/crew64.json"
 git -C "$W" -c user.name=t -c user.email=t@x init -q planted 2>/dev/null; git -C "$W/planted" -c user.name=t -c user.email=t@x commit -q --allow-empty -m p
 mkdir -p "$W/planted/.claude"; python3 -I -c '
-import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$W/planted/.claude/ai-dev-system.json"
+import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$W/planted/.claude/crew64.json"
 cp "$M/.git/worktrees/wt/commondir" "$TMP/commondir.bak"; printf '%s\n' "$W/planted/.git" > "$M/.git/worktrees/wt/commondir"
 out="$(run "$W" status)"
 case "$out" in *"config=none guard=on"*) ok "status ignores a planted config root inside the worktree";; *) bad "planted status: $out";; esac
 out="$(run "$W" get features.orchestrator_guard)"; [ "$out" = "true" ] && ok "get ignores the planted root too" || bad "planted get: $out"
 cp "$TMP/commondir.bak" "$M/.git/worktrees/wt/commondir"; rm -rf "$W/planted"
 out="$(run "$W" status)"
-case "$out" in *"config=$M/.claude/ai-dev-system.json"*) ok "status reads the real main checkout again once commondir is restored";; *) bad "restored status: $out";; esac
+case "$out" in *"config=$M/.claude/crew64.json"*) ok "status reads the real main checkout again once commondir is restored";; *) bad "restored status: $out";; esac
 
 # 14. a config at an unregistered root is reported as untrusted and not applied
 M3="$TMP/main3"; git init -q "$M3" && git -C "$M3" -c user.name=t -c user.email=t@x commit -q --allow-empty -m init
 mkdir -p "$M3/.claude"; python3 -I -c '
-import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/ai-dev-system.json"
+import json,sys; d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/crew64.json"
 out="$(run "$M3" status)"
-case "$out" in *"config=untrusted:$M3/.claude/ai-dev-system.json guard=on"*) ok "status marks a config at an unregistered root untrusted and keeps defaults";; *) bad "untrusted status: $out";; esac
+case "$out" in *"config=untrusted:$M3/.claude/crew64.json guard=on"*) ok "status marks a config at an unregistered root untrusted and keeps defaults";; *) bad "untrusted status: $out";; esac
 
 # 12. an unknown metering kind falls back to none; env overrides do not apply to metering
 setfeat '"bogus"' metering
 out="$(run "$M" get features.metering)"; [ "$out" = "none" ] && ok "features.metering bogus → none" || bad "bogus metering: $out"
-out="$(cd "$M" && AI_DEV_SYSTEM_FEATURE_METERING=off python3 -I "$MOD" status 2>&1)"
+out="$(cd "$M" && CREW64_FEATURE_METERING=off python3 -I "$MOD" status 2>&1)"
 case "$out" in *"metering=none"*) ok "env override ignored for metering";; *) bad "metering env: $out";; esac
 
 exit $fail

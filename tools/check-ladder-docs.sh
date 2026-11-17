@@ -33,21 +33,21 @@ need docs/05-delegation.md "At rung 2, an escalation re-dispatches at rung 2"
 need docs/05-delegation.md "one allowance of two per task"
 need docs/05-delegation.md 'DeepSeek row where `platform.hosts` has an entry for the host, otherwise the Claude row'
 # Decision 0005: portability
-need docs/05-delegation.md ".claude/ai-dev-system.json"
-need docs/05-delegation.md "config/ai-dev-system.defaults.json"
+need docs/05-delegation.md ".claude/crew64.json"
+need docs/05-delegation.md "config/crew64.defaults.json"
 need docs/05-delegation.md "gateway.kind"
 need docs/05-delegation.md "the configured gateway"
 need AGENTS.md "features.bot_identity"
 need AGENTS.md "install-bot-identity.sh"
 need README.md "## Using this on your own setup"
-need README.md "tools/harness-enable.sh"
+need README.md "tools/crew64-enable.sh"
 need README.md "config/examples/orca-solvela.json"
-need README.md "aidev.trustedRoot"
+need README.md "crew64.trustedRoot"
 need README.md "## Upgrading an existing install"
-need README.md "re-run tools/harness-enable.sh against each existing main checkout"
+need README.md "re-run tools/crew64-enable.sh against each existing main checkout"
 need docs/decisions/0005-feature-switches-and-portability.md "until it is registered every reader uses the defaults"
-need docs/decisions/0005-feature-switches-and-portability.md "aidev.trustedRoot"
-need docs/12-orca-setup.md "aidev.bot.name"
+need docs/decisions/0005-feature-switches-and-portability.md "crew64.trustedRoot"
+need docs/12-orca-setup.md "crew64.bot.name"
 need docs/05-delegation.md "except a budget or provider error"
 need docs/05-delegation.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
 need docs/05-delegation.md "no Claude Code skills or hooks"
@@ -73,8 +73,8 @@ need skills/orchestrator/SKILL.md "--model claude-sonnet-5-5"
 need skills/orchestrator/SKILL.md "role attribution through the team API key"
 # Decision 0005: configuration, switches, platform seam
 need skills/orchestrator/SKILL.md "## Configuration"
-need skills/orchestrator/SKILL.md 'aidev_config.py" status'
-need skills/orchestrator/SKILL.md "AI_DEV_SYSTEM_FEATURE_"
+need skills/orchestrator/SKILL.md 'crew64_config.py" status'
+need skills/orchestrator/SKILL.md "CREW64_FEATURE_"
 need skills/orchestrator/SKILL.md "model_ladder"
 need skills/orchestrator/SKILL.md "When model_ladder is off"
 need skills/orchestrator/SKILL.md "When metering is none"
@@ -84,7 +84,7 @@ need skills/orchestrator/SKILL.md "create an isolated workspace"
 need skills/orchestrator/SKILL.md "hand a diff to a reviewer"
 need skills/orchestrator/SKILL.md "platform.hosts"
 need skills/orchestrator/SKILL.md "gateway.kind"
-need skills/orchestrator/SKILL.md "config/ai-dev-system.defaults.json"
+need skills/orchestrator/SKILL.md "config/crew64.defaults.json"
 
 need docs/templates/plan.md "| Vendor |"
 
@@ -105,11 +105,11 @@ need skills/plan-tooling/SKILL.md "name: plan-tooling"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.
-if ! python3 -I tools/aidev_config.py check config/ai-dev-system.defaults.json >/dev/null 2>&1; then
-  echo "config/ai-dev-system.defaults.json: fails aidev_config.py check"; missing=$((missing + 1))
+if ! python3 -I tools/crew64_config.py check config/crew64.defaults.json >/dev/null 2>&1; then
+  echo "config/crew64.defaults.json: fails crew64_config.py check"; missing=$((missing + 1))
 fi
 for id in $(python3 -I -c '
-import json; d=json.load(open("config/ai-dev-system.defaults.json"))["models"]
+import json; d=json.load(open("config/crew64.defaults.json"))["models"]
 ids=set(d["research"])|set(d["claude_implementer"])|{d["codex_reviewer"]["model"]}
 print(" ".join(sorted(ids)))' 2>/dev/null); do
   need docs/05-delegation.md "$id"

@@ -18,7 +18,7 @@ Any agent that writes runs as an Orca worker so Orca can see, stop, and inspect 
 
 Adopted 2026-10-24, see [decision 0001](decisions/0001-tiered-protocol.md). The orchestrator names the tier in the worker brief. When in doubt, pick the higher tier. These are task tiers for process weight, not the action-approval tiers in the historical audit.
 
-Risk decides the tier, not size or file type. Any change to delegation policy, AGENTS.md, `.claude/settings.json`, `.claude/ai-dev-system.json` (the feature switches and install values, decision 0005), hook scripts, or any other protection setting is risky, even a one-line edit. The examples below are illustrations and risk overrides them.
+Risk decides the tier, not size or file type. Any change to delegation policy, AGENTS.md, `.claude/settings.json`, `.claude/crew64.json` (the feature switches and install values, decision 0005), hook scripts, or any other protection setting is risky, even a one-line edit. The examples below are illustrations and risk overrides them.
 
 | Tier | Examples | Implementer | Reviewer | Record |
 |---|---|---|---|---|
@@ -44,7 +44,7 @@ Rules:
 - The risky tier is always rung 2, whatever the complexity. Nothing else couples the two axes.
 - The orchestrator's read-only native subagents run at rung 1 by default, and at rung 2 only when the question being researched is itself risky-tier. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
 
-The ladder table. The ids below are the shipped defaults in `config/ai-dev-system.defaults.json`; a repository's `models` block in `.claude/ai-dev-system.json` may override them, and the orchestrator reports every deviation in its session status line. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
+The ladder table. The ids below are the shipped defaults in `config/crew64.defaults.json`; a repository's `models` block in `.claude/crew64.json` may override them, and the orchestrator reports every deviation in its session status line. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
 
 | Role | Rung 0 | Rung 1 | Rung 2 |
 |---|---|---|---|
@@ -152,7 +152,7 @@ Mirror an agent into `.codex/agents/<name>.toml` only when Codex is expected to 
 
 ## Ladder review
 
-The configured gateway (`gateway.kind` in `.claude/ai-dev-system.json`, with `features.metering` on) is the meter for the ladder (decision 0004, section 6). Solvela, the owner's gateway, is the reference implementation; `openai-compatible` names any other proxy that logs spend; `none` means no meter and token counts come from worker reports only.
+The configured gateway (`gateway.kind` in `.claude/crew64.json`, with `features.metering` on) is the meter for the ladder (decision 0004, section 6). Solvela, the owner's gateway, is the reference implementation; `openai-compatible` names any other proxy that logs spend; `none` means no meter and token counts come from worker reports only.
 
 - Which sessions route through the configured gateway: pay-per-token workers, which today means DeepSeek workers (already there on the owner's host), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on a subscription. Claude Code sessions on a subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered spend.
 - Attribution, Solvela: every worker launched through the gateway sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. The gateway's `spend_logs` then hold model, provider, tokens and cost per task with no bookkeeping by any agent. Until docs/12 records a verified way to carry that header at launch, attribution is by role through the team API key (`gateway.team_key_env` names the variables), and per-task numbers come from the worker's report.
