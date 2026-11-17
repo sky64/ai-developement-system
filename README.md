@@ -15,6 +15,10 @@ The harness is built for Orca with Claude and Codex; DeepSeek workers and a mete
 3. Only if you want an agent identity for pushes and merges: run `tools/bot/install-bot-identity.sh --name <login> --email <address> --token-command "<command that prints the token>"` once per machine, then set `features.bot_identity` to true in the repos that use it.
 4. Start a Claude session in the repo; the orchestrator prints its configuration on its first line. The rules are in [docs/05-delegation.md](docs/05-delegation.md).
 
+### Upgrading an existing install
+
+A repo's config governs only after its main checkout is registered as `aidev.trustedRoot` in your global git config. After updating the plugin, re-run tools/harness-enable.sh against each existing main checkout, on every machine and user account that runs the harness, even where `.claude/ai-dev-system.json` already exists; the run is idempotent and only adds the registration. Until then that repo runs on the defaults (guard on, ladder on, no metering, no bot) and the orchestrator's status line shows `config=untrusted:<path>`. Reinstalling the bot identity alone does not re-enable the bot in a repo; the registration does.
+
 ```text
 /plugin install ai-dev-system --marketplace sky64/ai-developement-system
 ```
