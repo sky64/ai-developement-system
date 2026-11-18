@@ -7,6 +7,9 @@
     "metering": "solvela",
     "build_map": false
   },
+  "limits": {
+    "review_cycles": 3
+  },
   "platform": {
     "kind": "orca",
     "hosts": {
