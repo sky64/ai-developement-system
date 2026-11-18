@@ -24,6 +24,13 @@ raw() { # expected_exit label raw_stdin ; stderr must be non-empty
   if [ "$got" = "$exp" ] && [ -n "$err" ]; then echo "ok   exit $got  $label"
   else echo "FAIL exit $got (want $exp, stderr '$err')  $label"; fail=1; fi
 }
+runenv() { # VAR=value expected_exit cwd tool json_input
+  local envpair="$1" exp="$2" cwd="$3" tool="$4" input="$5"
+  printf '{"tool_name":"%s","cwd":"%s","tool_input":%s}' "$tool" "$cwd" "$input" \
+    | env ORCHESTRATOR_GUARD= "$envpair" python3 -I "$HOOK" 2>/dev/null; local got=$?
+  if [ "$got" = "$exp" ]; then echo "ok   exit $got  [$envpair] $tool $(echo "$input" | cut -c1-50)"
+  else echo "FAIL exit $got (want $exp)  [$envpair] cwd=$cwd $tool $input"; fail=1; fi
+}
 M="$TMP/main"; W="$TMP/wt"; WS="$TMP/wt with space"
 
 # Original cases: main checkout denies writes, allows reads.
@@ -50,9 +57,23 @@ run 0 "$W" Bash   '{"command":"cat > docs/x.md <<EOF\nhi\nEOF"}'
 run 0 "$W" Write  "{\"file_path\":\"$W/docs/new.md\",\"content\":\"hi\"}"
 run 2 "$W" Write  "{\"file_path\":\"$M/x.md\",\"content\":\"hi\"}"
 run 2 "$W" Edit   '{"file_path":"../main/AGENTS.md","old_string":"a","new_string":"b"}'
-run 2 "$W" MultiEdit '{"file_path":"/tmp/outside.md","edits":[]}'
+run 0 "$W" MultiEdit '{"file_path":"/tmp/outside.md","edits":[]}'   # scratch: allowed since the field fixes
 run 2 "$W" NotebookEdit '{"notebook_path":"../main/n.ipynb","new_source":"x"}'
 run 2 "$W" Write  '{"content":"no path"}'
+
+# Field fixes 2026-11-18: the session scratchpad under /tmp or $TMPDIR is writable from any checkout.
+run 0 "$M" Write  '{"file_path":"/tmp/brief.md","content":"hi"}'
+run 0 "$W" Edit   '{"file_path":"/tmp/brief.md","old_string":"a","new_string":"b"}'
+run 2 "$M" Write  '{"file_path":"/tmp/../etc/passwd","content":"hi"}'
+mkdir -p "$TMP/scratch"; ln -s "$M" "$TMP/scratch/repo"; ln -s "$TMP/scratch" "/tmp/guardtest-$$"
+run 2 "$M" Write  "{\"file_path\":\"/tmp/guardtest-$$/repo/x.md\",\"content\":\"hi\"}"   # symlink out of /tmp into the repo
+rm -f "/tmp/guardtest-$$"
+SCR="$(mktemp -d -p "${XDG_RUNTIME_DIR:-$HOME}" guardtest.XXXXXX)"   # outside /tmp, so only the TMPDIR rule can allow it
+runenv TMPDIR="$SCR" 0 "$M" Write "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                  # TMPDIR allowance
+run 2 "$M" Write  "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                                   # same path without TMPDIR: denied
+rmdir "$SCR"
+runenv TMPDIR="$M/tmp" 2 "$M" Write "{\"file_path\":\"$M/tmp/b.md\",\"content\":\"hi\"}"              # TMPDIR inside the repo: ignored
+run 2 "$M" Write  '{"file_path":"tmp/b.md","content":"hi"}'                                             # relative: not scratch
 
 # P1: orca exemption only for a single plain invocation.
 run 2 "$M" Bash   '{"command":"orca status; git add README.md"}'
@@ -194,13 +215,6 @@ cfg() { mkdir -p "$1/.claude"; python3 -I -c '
 import json,sys
 d=json.load(open(sys.argv[1])); d["features"]["orchestrator_guard"]=(sys.argv[3]=="true")
 json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$1/.claude/crew64.json" "$2"; }
-runenv() { # VAR=value expected_exit cwd tool json_input
-  local envpair="$1" exp="$2" cwd="$3" tool="$4" input="$5"
-  printf '{"tool_name":"%s","cwd":"%s","tool_input":%s}' "$tool" "$cwd" "$input" \
-    | env ORCHESTRATOR_GUARD= "$envpair" python3 -I "$HOOK" 2>/dev/null; local got=$?
-  if [ "$got" = "$exp" ]; then echo "ok   exit $got  [$envpair] $tool $(echo "$input" | cut -c1-50)"
-  else echo "FAIL exit $got (want $exp)  [$envpair] cwd=$cwd $tool $input"; fail=1; fi
-}
 cfg "$M" false
 run 0 "$M" Write  '{"file_path":"x.md","content":"hi"}'                      # off by config allows
 err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>&1 >/dev/null)"

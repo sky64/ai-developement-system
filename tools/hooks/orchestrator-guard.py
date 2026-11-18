@@ -53,6 +53,56 @@ except Exception:  # a broken or partial plugin install must not crash the guard
 
 WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
+# The session scratchpad. A write tool may target /tmp or $TMPDIR from any
+# checkout (field fixes 2026-11-18): orchestrators write worker briefs there
+# and pass them with worker-start --spec-file. Same no-climb rule as the Bash
+# redirect check, realpath so a symlink out of /tmp into a repo is denied, and
+# never inside a git working tree, so a repository under /tmp stays a repository.
+SCRATCH_ROOT = "/tmp"
+
+
+def _under(path: str, root: str) -> bool:
+    real_root = os.path.realpath(root)
+    return path == real_root or path.startswith(real_root.rstrip(os.sep) + os.sep)
+
+
+def inside_git_work_tree(real_path: str) -> bool:
+    """True when real_path (existing or not) lies inside some git working tree.
+    Asked of the nearest existing ancestor, so a repository's own .git answers
+    for it; a worker that skews its worktree's git state cannot hide that."""
+    probe = real_path
+    while probe and not os.path.isdir(probe):
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    try:
+        out = subprocess.run(
+            ["git", "-C", probe, "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except Exception:
+        return True  # cannot tell: treat as a repository and deny the allowance
+    return out.returncode == 0 and out.stdout.strip() == "true"
+
+
+def scratch_target(target: str, env=None) -> bool:
+    """True when target is a session scratch path: absolute, no '..' segment,
+    its real path under /tmp or under $TMPDIR, and not inside any git working
+    tree. A TMPDIR inside a working tree is ignored for the same reason."""
+    env = os.environ if env is None else env
+    if not os.path.isabs(target) or ".." in target.split(os.sep):
+        return False
+    real = os.path.realpath(target)
+    if not _under(real, SCRATCH_ROOT):
+        tmpdir = env.get("TMPDIR")
+        if not tmpdir or not os.path.isabs(tmpdir):
+            return False
+        real_tmpdir = os.path.realpath(tmpdir)
+        if not _under(real, real_tmpdir) or inside_git_work_tree(real_tmpdir):
+            return False
+    return not inside_git_work_tree(real)
+
 GIT_DENY = {
     "commit", "add", "apply", "am", "cherry-pick", "merge", "rebase", "reset",
     "checkout", "switch", "restore", "rm", "mv", "push", "clean",
@@ -363,6 +413,10 @@ def decide(payload) -> int:
     cwd = payload.get("cwd") or os.getcwd()
     if tool not in WRITE_TOOLS and tool != "Bash":
         return 0
+    if tool in WRITE_TOOLS:
+        target = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if isinstance(target, str) and scratch_target(target):
+            return 0
     if in_worktree(cwd):
         if tool in WRITE_TOOLS:
             reason = path_outside_cwd(cwd, tool_input)
