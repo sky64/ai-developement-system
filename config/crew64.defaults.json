@@ -6,10 +6,16 @@
     "bot_identity": false,
     "metering": "none",
     "build_map": false,
-    "scout64": true
+    "scout64": true,
+    "process_ladder": true
   },
   "limits": {
     "review_cycles": 2
+  },
+  "process": {
+    "default_mode": "auto",
+    "native_max_files": 3,
+    "native_max_tool_calls": 40
   },
   "platform": {
     "kind": "orca",
