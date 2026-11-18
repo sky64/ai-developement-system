@@ -27,8 +27,10 @@ agent_fields() { # file field... : the agent file's frontmatter is exactly these
   # check sees is what any YAML parser sees: an opening "---" on line 1 and a
   # closing "---"; inside, only plain "key: value" lines, each key once, and
   # indented text only under a block scalar ("key: >-"). Quoted or spaced
-  # keys, comments, continuation lines, nested values and keys outside the
-  # listed set are rejected rather than interpreted.
+  # keys, comments, continuation lines, nested values, keys outside the
+  # listed set and any byte that is not printable ASCII (a carriage return or
+  # a Unicode line break is a line break to YAML and not to this check) are
+  # rejected rather than interpreted.
   local out
   if ! out="$(python3 -I -c '
 import re, sys
@@ -42,16 +44,20 @@ def fail(msg):
 
 
 try:
-    with open(path, encoding="utf-8", newline="") as fh:
-        lines = fh.read().split("\n")
-except (OSError, UnicodeDecodeError) as exc:
+    with open(path, "rb") as fh:
+        raw = fh.read().split(b"\n")
+except OSError as exc:
     fail(f"cannot read the agent file: {exc}")
-if lines[0] != "---":
+if raw[0] != b"---":
     fail("no frontmatter block on line 1")
-if "---" not in lines[1:]:
+if b"---" not in raw[1:]:
     fail("the frontmatter block is not closed")
+block = raw[1:raw.index(b"---", 1)]
+for number, line in enumerate(block, start=2):
+    if any(byte < 0x20 or byte > 0x7E for byte in line):
+        fail(f"line {number}: only printable ASCII is accepted in the frontmatter")
 fields, in_block = {}, False
-for number, line in enumerate(lines[1:lines.index("---", 1)], start=2):
+for number, line in enumerate((line.decode("ascii") for line in block), start=2):
     plain = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*): (\S.*)", line)
     if plain:
         key, value = plain.groups()
