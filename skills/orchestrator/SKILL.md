@@ -73,7 +73,7 @@ Decision 0009: the tier decides whether a reviewer is required; the mode decides
 - With `features.process_ladder` off every task is delegated.
 - A plan's task rows carry a Mode column; a planned task takes its mode from its row.
 - Review in native mode follows the tier. Docs-only diffs skip Codex at normal tier; any code change gets it. A docs-only diff touches prose only: no script, hook, config or code file.
-- The model that works a native task is this session's. Record the rung the tier gives and report the session's model id as the model actually used.
+- The model that works a native task is this session's. Record the task's rung unchanged (its plan row's rung, or the tier's for a task outside any plan) and report the session's model id as the model actually used.
 
 Native procedure:
 
@@ -86,7 +86,7 @@ Native procedure:
 7. Review per tier, then write the completion report: the same as for delegated work plus `Mode: native`. Update the workspace comment.
 8. Leave the worktree and return to the main checkout.
 
-Escalation: count the files the task has touched (created, modified or deleted: every path in `git status --porcelain` plus `git diff --name-only <base>..HEAD`) and your own tool calls, and keep both counts in the task record. A native task that touches more than `process.native_max_files` files or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress, and hands the worktree to a worker; the mode never goes back to native. The brief names the files touched and what remains. The escalation draws on the `limits.review_cycles` allowance like any other.
+Escalation: count the files the task has touched (created, modified or deleted: the distinct file paths in `git status --porcelain --untracked-files=all` and `git diff --name-only <base>..HEAD` together; without `--untracked-files=all` a new directory counts as one path however many files it holds) and your own tool calls, and keep both counts in the task record. A native task that touches more than `process.native_max_files` files or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress, and hands the worktree to a worker; the mode never goes back to native. The brief names the files touched and what remains. The escalation draws on the `limits.review_cycles` allowance like any other.
 
 ## Rungs and models
 

@@ -257,6 +257,18 @@ forbid skills/orchestrator/SKILL.md "You do not write files and you do not commi
 forbid skills/orchestrator/SKILL.md "Anything that writes runs as an Orca worker."
 forbid AGENTS.md "does not write code or commit, apart"
 forbid docs/05-delegation.md "Otherwise it delegates at every tier."
+# Codex cycle 1 on decision 0009: the file count sees every untracked file, a
+# planned native task keeps its plan's rung, and the tier and summary texts
+# carry the native exceptions.
+need skills/orchestrator/SKILL.md "git status --porcelain --untracked-files=all"
+need docs/05-delegation.md "git status --porcelain --untracked-files=all"
+need skills/orchestrator/SKILL.md "its plan row's rung"
+forbid skills/orchestrator/SKILL.md "Record the rung the tier gives"
+need AGENTS.md "a docs-only native diff skips the review"
+need docs/05-delegation.md "none for a docs-only native diff"
+forbid README.md "orchestrates without writing code"
+forbid docs/05-delegation.md "the orchestrator does not code"
+need docs/05-delegation.md "# Delegation policy: the orchestrator does not write in the main checkout"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.

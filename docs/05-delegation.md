@@ -1,4 +1,4 @@
-# Delegation policy: the orchestrator does not code
+# Delegation policy: the orchestrator does not write in the main checkout
 
 Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist implementer existed, but a lead thread given money-path work never invoked it and edited the files itself. Nothing enforced the selection. This policy adds enforcement and a required selection step.
 
@@ -23,7 +23,7 @@ Risk decides the tier, not size or file type. Any change to delegation policy, A
 | Tier | Examples | Implementer | Reviewer | Record |
 |---|---|---|---|---|
 | Trivial | Docs, config, a single file, no new logic | One worker, generalist allowed | None | The commit message |
-| Normal | Features, bug fixes, tests, hook or script changes | One specialist worker | One Codex worker | Scope, base commit, files, acceptance criteria in the worker brief |
+| Normal | Features, bug fixes, tests, hook or script changes | One specialist worker | One Codex worker (none for a docs-only native diff; see Process ladder) | Scope, base commit, files, acceptance criteria in the worker brief |
 | Risky | Money path, auth, credentials, CI or deploy, AGENTS.md policy, anything that merges or runs unattended | One specialist worker, attended | One Codex worker, up to `limits.review_cycles` correction cycles (default 2) | Full record: the above plus permission mode, deadline, hard limits, retry allowance |
 
 The orchestrator may edit directly in the main checkout only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`. Otherwise it never writes there: it delegates, or works natively in a task worktree where the Process ladder allows. In native mode the orchestrator is the implementer in the table above.
@@ -80,7 +80,8 @@ Adopted 2026-11-18, see [decision 0009](decisions/0009-process-ladder.md). The t
 
 - `process.default_mode` in `.claude/crew64.json` is `auto` (the table decides), `native` (the table still forbids native for risky or multi-task work) or `delegated` (every task is delegated). `CREW64_PROCESS_MODE` overrides it for one session. Risky tier is never native, whatever the setting says. With `features.process_ladder` off every task is delegated, as before decision 0009.
 - Native work is still a branch and a pull request. The orchestrator creates a task worktree, moves into it, writes the tests first, implements, runs the repository's verification list, commits, pushes and opens the pull request where `features.bot_identity` allows, has the diff reviewed as the tier requires, and returns to the main checkout. It never writes in the main checkout. A docs-only native diff at normal tier skips the Codex review; any code change gets it.
-- Escalation: a native task that touches more than `process.native_max_files` files (created, modified or deleted) or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress on the task branch, and is handed to a worker with a brief that names the files touched and what remains. The mode never goes back to native for that task, and the escalation draws on the `limits.review_cycles` allowance. The tool-call count is the orchestrator's own, kept in the task record; nothing executable enforces it.
+- Escalation: a native task that touches more than `process.native_max_files` files (created, modified or deleted; the distinct file paths in `git status --porcelain --untracked-files=all` and the committed diff against the base together) or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress on the task branch, and is handed to a worker with a brief that names the files touched and what remains. The mode never goes back to native for that task, and the escalation draws on the `limits.review_cycles` allowance. The tool-call count is the orchestrator's own, kept in the task record; nothing executable enforces it.
+- A native task keeps its rung: the plan row's for a planned task, the tier's otherwise. The model that does the work is the orchestrator session's, and the completion report names it.
 - The Orca workspace comment is set at task start to `<task>: mode=native tier=<tier> rung=<rung>` and updated at completion. The completion report is the same as for delegated work plus `Mode: native`.
 - The thresholds change only through a new decision record that cites the process numbers from at least one review period (Ladder review below).
 

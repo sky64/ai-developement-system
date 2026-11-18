@@ -1,6 +1,6 @@
 # crew64
 
-Development workflow on [Orca](https://orca.stably.ai): Claude orchestrates without writing code, specialist agents implement in Orca worktrees, Codex independently reviews, and the owner approves where branch protection requires it. Merge and deploy are performed by the agent identity after a clean, verified review and reported to the owner ([decision](docs/decisions/2026-10-25-agent-merge-and-deploy.md)). Policy: [docs/05-delegation.md](docs/05-delegation.md). The move from Cloud Room to Orca is [decision 0003](docs/decisions/0003-orca.md).
+Development workflow on [Orca](https://orca.stably.ai): Claude orchestrates and never writes in the main checkout, specialist agents implement in Orca worktrees (the orchestrator does one small, bounded, non-risky task itself in a task worktree; see the process ladder in the policy), Codex independently reviews, and the owner approves where branch protection requires it. Merge and deploy are performed by the agent identity after a clean, verified review and reported to the owner ([decision](docs/decisions/2026-10-25-agent-merge-and-deploy.md)). Policy: [docs/05-delegation.md](docs/05-delegation.md). The move from Cloud Room to Orca is [decision 0003](docs/decisions/0003-orca.md).
 
 Start with the [Orca setup record](docs/12-orca-setup.md). Shared instructions are in [AGENTS.md](AGENTS.md), imported by [CLAUDE.md](CLAUDE.md) for Claude; Codex reads AGENTS.md directly.
 
