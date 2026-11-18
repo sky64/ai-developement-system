@@ -342,6 +342,28 @@ err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md",
 if [ "$got" = 2 ] && [ -n "$err" ] && case "$err" in "orchestrator-guard: denied"*) true;; *) false;; esac; then echo "ok   exit $got  plugin hooks.json command denies Write in main checkout"
 else echo "FAIL exit $got (want 2, stderr '$err')  plugin hooks.json command"; fail=1; fi
 
+# Decision 0009, native mode: a session that moved into its task worktree (the
+# hook payload carries that directory) may write there, and is still denied
+# the main checkout by absolute path. The pair is the whole mechanism. It
+# covers the file write tools; Bash is not checked in a worktree (the
+# documented tripwire limit, docs/05 Enforcement).
+native_pair() { # label
+  local inside outside
+  printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$W" \
+    | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>/dev/null; inside=$?
+  printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"%s/x.md","content":"hi"}}' "$W" "$M" \
+    | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>/dev/null; outside=$?
+  if [ "$inside" = 0 ] && [ "$outside" = 2 ]; then echo "ok   $1"
+  else echo "FAIL $1 (inside exit $inside want 0, main checkout exit $outside want 2)"; fail=1; fi
+}
+native_pair "native mode: inside allowed, main checkout denied"
+# A main-checkout denial names the native path.
+err="$(printf '{"tool_name":"Write","cwd":"%s","tool_input":{"file_path":"x.md","content":"hi"}}' "$M" \
+  | ORCHESTRATOR_GUARD= python3 -I "$HOOK" 2>&1 >/dev/null)"; got=$?
+if [ "$got" = 2 ] && case "$err" in *"For a native task, move into its task worktree first (orchestrator skill, Process ladder)."*) true;; *) false;; esac
+then echo "ok   exit 2  main-checkout denial names the Process ladder"
+else echo "FAIL exit $got (want 2, stderr '$err')  main-checkout denial names the Process ladder"; fail=1; fi
+
 printf '{"tool_name":"Write","cwd":"%s","tool_input":{}}' "$M" | ORCHESTRATOR_GUARD=off python3 -I "$HOOK" 2>/dev/null \
   && echo "ok   override ORCHESTRATOR_GUARD=off allows" || { echo "FAIL override"; fail=1; }
 exit $fail
