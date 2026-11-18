@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Thin wrapper installed by tools/crew64-enable.sh; the real script ships in the crew64 plugin.
+# usage: enable.sh [/path/to/repo] [--config <crew64.json>] [--no-commit] [--no-skill]
+set -euo pipefail
+real="@CREW64_ENABLE@"
+[ -f "$real" ] || { echo "harness-enable: plugin script not found at $real; pull the crew64 checkout or re-run tools/crew64-enable.sh from where it lives" >&2; exit 1; }
+exec bash "$real" "$@"

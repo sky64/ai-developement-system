@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 # Enable the crew64 plugin in a repository, write its config, and register it with Orca.
-# usage: crew64-enable.sh [/path/to/repo] [--config <prepared crew64.json>] [--no-commit]
+# usage: crew64-enable.sh [/path/to/repo] [--config <prepared crew64.json>] [--no-commit] [--no-skill]
 #
 # Run by path from a human or unharnessed session (the orchestrator guard
 # would deny its writes). Steps: merge the plugin into .claude/settings.json;
 # write .claude/crew64.json from config/crew64.defaults.json or
 # from --config (validated first; an existing file is never overwritten); add
 # the orchestrator line to CLAUDE.md; register the repo with Orca and set its
-# base ref; commit the three files unless --no-commit. Idempotent.
+# base ref; commit the three files unless --no-commit. Also installs or
+# refreshes the user-level /harness-enable wrapper skill under $HOME/.claude
+# so every machine forwards to this script (--no-skill skips). Idempotent.
 set -euo pipefail
 
 plugin_root="$(cd "$(dirname "$0")/.." && pwd)"
 defaults="$plugin_root/config/crew64.defaults.json"
 reader="$plugin_root/tools/crew64_config.py"
 
-repo="."; commit=1; config_src=""
+repo="."; commit=1; config_src=""; skill=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-commit) commit=0; shift ;;
+    --no-skill) skill=0; shift ;;
     --config) config_src="${2:-}"; [ -n "$config_src" ] || { echo "crew64-enable: --config needs a path" >&2; exit 2; }; shift 2 ;;
     -h|--help) sed -n '2,3p' "$0"; exit 0 ;;
     -*) echo "crew64-enable: unknown option $1" >&2; exit 2 ;;
@@ -52,6 +55,30 @@ fi
 if [ -n "${ORCA_CLI_COMMAND:-}" ]; then orca_bin="$ORCA_CLI_COMMAND"
 elif [ -n "${ORCA_TERMINAL_HANDLE:-}" ]; then orca_bin="orca"
 else orca_bin="orca-ide"; fi
+
+# 0b. User-level /harness-enable wrapper. The home-office copy went stale once
+# (pre-0005 text writing the old plugin id) because it was copied by hand; the
+# plugin now installs it and points it at this script's real location.
+skill_dir="$HOME/.claude/skills/harness-enable"
+if [ "$skill" = 0 ]; then
+  echo "skill: skipped (--no-skill)"
+else
+  skill_src="$plugin_root/tools/harness-enable-skill"
+  rendered="$(sed "s|@CREW64_ENABLE@|$plugin_root/tools/crew64-enable.sh|" "$skill_src/enable.sh.tmpl")"
+  if ! mkdir -p "$skill_dir" 2>/dev/null || [ ! -w "$skill_dir" ]; then
+    echo "skill: skipped ($skill_dir is not writable)"
+  elif [ -f "$skill_dir/enable.sh" ] && [ -f "$skill_dir/SKILL.md" ] \
+       && [ "$(cat "$skill_dir/enable.sh")" = "$rendered" ] && cmp -s "$skill_src/SKILL.md" "$skill_dir/SKILL.md"; then
+    echo "skill: current $skill_dir"
+  else
+    verb=installed; [ -e "$skill_dir/enable.sh" ] && verb=refreshed
+    if printf '%s\n' "$rendered" > "$skill_dir/enable.sh" && chmod 755 "$skill_dir/enable.sh" && cp "$skill_src/SKILL.md" "$skill_dir/SKILL.md"; then
+      echo "skill: $verb $skill_dir"
+    else
+      echo "skill: skipped (could not write $skill_dir)"
+    fi
+  fi
+fi
 
 # 1. settings.json merge
 mkdir -p "$repo/.claude"

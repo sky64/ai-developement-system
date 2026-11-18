@@ -11,6 +11,7 @@ printf '#!/usr/bin/env bash\necho "{}"\n' > "$TMP/orca-stub"; chmod +x "$TMP/orc
 export ORCA_CLI_COMMAND="$TMP/orca-stub"
 export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+mkdir -p "$TMP/home-default"; export HOME="$TMP/home-default"   # the wrapper install never touches the real home
 fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }
@@ -155,6 +156,23 @@ out="$(bash "$ENABLE" "$R20" 2>&1)"; rc=$?
 R21="$TMP/r21"; newrepo "$R21"; printf 'x\n' > "$TMP/outside-rules.md"; ln -s "$TMP/outside-rules.md" "$R21/CLAUDE.md"; git -C "$R21" add CLAUDE.md && git -C "$R21" commit -q -m link
 out="$(bash "$ENABLE" "$R21" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && case "$out" in *"outside the repository"*) true;; *) false;; esac && ok "symlink outside the repo is reported and the run succeeds" || bad "outside symlink: rc=$rc out=$out"
+
+# 5i. the user-level harness-enable wrapper is installed, refreshed and left alone when current
+H="$TMP/home"; mkdir -p "$H"; R22="$TMP/r22"; newrepo "$R22"
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: installed"*) true;; *) false;; esac && [ -x "$H/.claude/skills/harness-enable/enable.sh" ] && grep -qF "$ENABLE" "$H/.claude/skills/harness-enable/enable.sh" && grep -q 'crew64@crew64' "$H/.claude/skills/harness-enable/SKILL.md" && ok "wrapper installed, points at this script" || bad "wrapper install: rc=$rc out=$(echo "$out" | grep skill)"
+s1="$(sha256sum "$H/.claude/skills/harness-enable/enable.sh" "$H/.claude/skills/harness-enable/SKILL.md" 2>/dev/null)"
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"
+case "$out" in *"skill: current"*) ok "second run reports the wrapper current";; *) bad "wrapper second run: $(echo "$out" | grep skill)";; esac
+[ -n "$s1" ] && [ "$s1" = "$(sha256sum "$H/.claude/skills/harness-enable/enable.sh" "$H/.claude/skills/harness-enable/SKILL.md" 2>/dev/null)" ] && ok "wrapper byte-identical after second run" || bad "wrapper rewritten"
+printf 'stale\n' > "$H/.claude/skills/harness-enable/enable.sh" 2>/dev/null
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"
+case "$out" in *"skill: refreshed"*) ok "stale wrapper is refreshed";; *) bad "wrapper refresh: $(echo "$out" | grep skill)";; esac
+out="$(HOME="$TMP/nohome" bash "$ENABLE" "$R22" --no-skill 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped (--no-skill)"*) true;; *) false;; esac && [ ! -e "$TMP/nohome/.claude" ] && ok "--no-skill skips the wrapper" || bad "--no-skill: rc=$rc out=$(echo "$out" | grep skill)"
+mkdir -p "$TMP/ro"; chmod 500 "$TMP/ro"
+out="$(HOME="$TMP/ro" bash "$ENABLE" "$R22" 2>&1)"; rc=$?; chmod 700 "$TMP/ro"
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && ok "unwritable HOME: wrapper skipped, run succeeds" || bad "ro HOME: rc=$rc out=$(echo "$out" | grep skill)"
 
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
