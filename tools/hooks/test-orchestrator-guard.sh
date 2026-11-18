@@ -90,6 +90,23 @@ if unshare -Urm true 2>/dev/null; then
 else
   echo "skip bind-mount case: unshare -Urm unavailable"
 fi
+# Codex cycle 2: git metadata behind a symlinked .git or a separate git dir; TMPDIR aliasing a repo via bind mount.
+git -C "$TMP" init -q symrepo && git -C "$TMP/symrepo" commit -q --allow-empty -m s
+mv "$TMP/symrepo/.git" "$TMP/detached-meta" && ln -s "$TMP/detached-meta" "$TMP/symrepo/.git"
+run 2 "$M" Write  "{\"file_path\":\"$TMP/symrepo/.git/config\",\"content\":\"hi\"}"             # F1: .git is a symlink; resolved path has no .git segment
+run 2 "$M" Write  "{\"file_path\":\"$TMP/detached-meta/config\",\"content\":\"hi\"}"             # F1: the git admin dir reached directly
+run 2 "$M" Write  "{\"file_path\":\"$TMP/detached-meta/hooks/new/deep\",\"content\":\"hi\"}"     # F1: nonexistent descendant of an admin dir
+git init -q --separate-git-dir "$TMP/separate-meta" "$TMP/seprepo" && git -C "$TMP/seprepo" commit -q --allow-empty -m s
+run 2 "$M" Write  "{\"file_path\":\"$TMP/separate-meta/config\",\"content\":\"hi\"}"             # F1: separate git dir
+run 2 "$M" Write  "{\"file_path\":\"$TMP/seprepo/.git\",\"content\":\"hi\"}"                      # F1: the .git file itself
+if unshare -Urm true 2>/dev/null; then
+  SCR2="$(mktemp -d -p "${XDG_RUNTIME_DIR:-$HOME}" guardtest.XXXXXX)"
+  got="$(unshare -Urm bash -c "mount --bind '$M/docs' '$SCR2' && printf '{\"tool_name\":\"Write\",\"cwd\":\"%s\",\"tool_input\":{\"file_path\":\"%s\",\"content\":\"hi\"}}' '$M' '$SCR2/new/file' | TMPDIR='$SCR2' ORCHESTRATOR_GUARD= python3 -I '$HOOK' >/dev/null 2>&1; echo \$?")"
+  [ "$got" = 2 ] && echo "ok   exit 2  Write under TMPDIR that is a bind mount of the repo (namespace)" || { echo "FAIL exit $got (want 2)  TMPDIR is a bind mount of a repo dir"; fail=1; }
+  rmdir "$SCR2" 2>/dev/null
+else
+  echo "skip TMPDIR bind-mount case: unshare -Urm unavailable"
+fi
 
 # P1: orca exemption only for a single plain invocation.
 run 2 "$M" Bash   '{"command":"orca status; git add README.md"}'

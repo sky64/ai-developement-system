@@ -187,6 +187,16 @@ HOME="$H3" bash "$TMP/plug-alias/tools/crew64-enable.sh" "$R24" >/dev/null 2>&1
 real_alias="$(bash "$H3/.claude/skills/harness-enable/enable.sh" --print-real 2>/dev/null)"
 [ "$real_alias" = "$P/tools/crew64-enable.sh" ] && ok "wrapper records the physical script path, not the symlink alias" || bad "wrapper alias: '$real_alias'"
 
+# 5k. (Codex cycle 2, F3) a failing realpath must not install a wrapper with an empty path
+mkdir -p "$TMP/bin"; cat > "$TMP/bin/realpath" <<'RP'
+#!/usr/bin/env bash
+case "${!#}" in *tools/crew64-enable.sh) exit 1 ;; esac
+exec /usr/bin/realpath "$@"
+RP
+chmod +x "$TMP/bin/realpath"; H4="$TMP/home4"; mkdir -p "$H4"; R25="$TMP/r25"; newrepo "$R25"
+out="$(HOME="$H4" PATH="$TMP/bin:$PATH" bash "$ENABLE" "$R25" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && [ ! -e "$H4/.claude/skills/harness-enable/enable.sh" ] && ok "realpath failure: wrapper skipped, nothing installed, run succeeds" || bad "realpath failure: rc=$rc out=$(echo "$out" | grep skill) installed=$(ls "$H4/.claude/skills/harness-enable" 2>/dev/null | tr '\n' ' ')"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

@@ -66,12 +66,18 @@ else
   skill_src="$plugin_root/tools/harness-enable-skill"
   # The physical path (a directory symlink alias would go stale) rendered as a
   # shell-quoted literal, so | & and quotes in the path survive (Codex, PR 20).
-  rendered="$(python3 -I - "$(realpath "$0")" "$skill_src/enable.sh.tmpl" <<'PY' 2>/dev/null || true
+  enable_real="$(realpath "$0" 2>/dev/null)" || enable_real=""
+  rendered=""
+  if [ -n "$enable_real" ] && [ -f "$enable_real" ]; then
+    rendered="$(python3 -I - "$enable_real" "$skill_src/enable.sh.tmpl" <<'PY' 2>/dev/null || true
 import shlex, sys
 print(open(sys.argv[2], encoding="utf-8").read().replace("@CREW64_ENABLE@", shlex.quote(sys.argv[1])), end="")
 PY
 )"
-  if [ -z "$rendered" ]; then
+  fi
+  if [ -z "$enable_real" ]; then
+    echo "skill: skipped (could not resolve the path of $0)"
+  elif [ -z "$rendered" ]; then
     echo "skill: skipped (could not render the wrapper from $skill_src)"
   elif ! mkdir -p "$skill_dir" 2>/dev/null || [ ! -w "$skill_dir" ]; then
     echo "skill: skipped ($skill_dir is not writable)"

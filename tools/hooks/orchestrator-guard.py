@@ -67,18 +67,29 @@ def _under(path: str, root: str) -> bool:
     return path == real_root or path.startswith(real_root.rstrip(os.sep) + os.sep)
 
 
-def inside_repository(real_path: str) -> bool:
-    """True when real_path (existing or not) is git metadata or lies under a
-    directory that holds a .git entry (a repository or a linked worktree).
-    Pure filesystem walk: no git subprocess, so GIT_DIR, GIT_CEILING_DIRECTORIES
+def _git_admin_dir(path: str) -> bool:
+    """A git administration directory: HEAD file beside objects/ and refs/
+    (a .git directory, a linked worktree's admin dir, a separate or bare git
+    dir). Recognised by shape, without git discovery."""
+    return (os.path.isfile(os.path.join(path, "HEAD"))
+            and os.path.isdir(os.path.join(path, "objects"))
+            and os.path.isdir(os.path.join(path, "refs")))
+
+
+def inside_repository(path: str) -> bool:
+    """True when path (existing or not) is git metadata or lies under a
+    directory that holds a .git entry or is itself a git admin dir. Pure
+    filesystem walk: no git subprocess, so GIT_DIR, GIT_CEILING_DIRECTORIES
     and the like cannot steer it (Codex review of PR 20, findings 1 and 2).
-    Any error while looking counts as inside: the allowance fails closed."""
-    if ".git" in real_path.split(os.sep):
+    Callers pass both the unresolved and the resolved path, so a symlinked
+    .git or a separate git dir is caught on one side or the other. Any error
+    while looking counts as inside: the allowance fails closed."""
+    if ".git" in path.split(os.sep):
         return True
-    probe = real_path
+    probe = path
     try:
         while True:
-            if os.path.lexists(os.path.join(probe, ".git")):
+            if os.path.lexists(os.path.join(probe, ".git")) or _git_admin_dir(probe):
                 return True
             parent = os.path.dirname(probe)
             if parent == probe:
@@ -88,63 +99,78 @@ def inside_repository(real_path: str) -> bool:
         return True
 
 
-def _mount_points():
-    """Mount points visible to this process, from /proc/self/mountinfo.
-    None when it cannot be read (the caller then denies the allowance)."""
+def _mounts():
+    """(mount point, root within its filesystem, fstype) for every mount this
+    process sees, from /proc/self/mountinfo. None when it cannot be read."""
     try:
         with open("/proc/self/mountinfo", encoding="utf-8") as fh:
             lines = fh.read().splitlines()
     except OSError:
         return None
-    points = []
+    out = []
     for line in lines:
-        fields = line.split(" ")
-        if len(fields) > 4:
-            raw = fields[4]  # mountinfo escapes space, tab, newline, backslash as octal
+        head, sep, tail = line.partition(" - ")
+        fields = head.split(" ")
+        if not sep or len(fields) < 5:
+            continue
+        fstype = tail.split(" ")[0] if tail else ""
+        decoded = []
+        for raw in (fields[4], fields[3]):
             for esc, ch in (("\\040", " "), ("\\011", "\t"), ("\\012", "\n"), ("\\134", "\\")):
                 raw = raw.replace(esc, ch)
-            points.append(raw)
-    return points
+            decoded.append(raw)
+        out.append((os.path.realpath(decoded[0]), decoded[1], fstype))
+    return out
 
 
-def crosses_mount_under(real_path: str, root: str) -> bool:
-    """True when a mount point other than root itself sits between root and
-    real_path. realpath does not see bind mounts, so a repository directory
-    bound onto a scratch path would pass the path tests; a nested mount inside
-    the scratch root is therefore refused (Codex review of PR 20, finding 3)."""
-    points = _mount_points()
-    if points is None:
-        return True
+SCRATCH_FSTYPES = {"tmpfs", "ramfs"}
+
+
+def scratch_root_ok(real_path: str, root: str, custom_root: bool) -> bool:
+    """Mount checks for a scratch target under root (Codex review of PR 20,
+    findings 3 and F2). realpath does not see bind mounts, so: (a) no mount
+    point other than root itself may sit between root and the target; (b) a
+    custom root ($TMPDIR) must live on a tmpfs or ramfs mount whose root is
+    "/", because a bind mount of a repository directory shows the source
+    filesystem's type and a non-root mount root. /tmp itself is trusted as the
+    spec's scratch root. Unreadable mountinfo denies."""
+    mounts = _mounts()
+    if mounts is None:
+        return False
     real_root = os.path.realpath(root)
-    for point in points:
-        real_point = os.path.realpath(point)
-        if real_point == real_root:
-            continue
-        if _under(real_point, real_root) and _under(real_path, real_point):
-            return True
-    return False
+    containing = None
+    for point, mount_root, fstype in mounts:
+        if point != real_root and _under(point, real_root) and _under(real_path, point):
+            return False
+        if _under(real_root, point) and (containing is None or len(point) > len(containing[0])):
+            containing = (point, mount_root, fstype)
+    if custom_root and containing is not None:
+        if containing[1] != "/" or containing[2] not in SCRATCH_FSTYPES:
+            return False
+    return True
 
 
 def scratch_target(target: str, env=None) -> bool:
     """True when target is a session scratch path: absolute, no '..' segment,
-    its real path under /tmp or under $TMPDIR, not inside any repository or
-    its metadata, and not behind a mount nested in the scratch root. A TMPDIR
-    inside a repository is ignored for the same reason."""
+    under /tmp or under $TMPDIR (unresolved and resolved), not inside any
+    repository or git admin dir on either path, and clear of the mount checks
+    in scratch_root_ok. A TMPDIR inside a repository is ignored."""
     env = os.environ if env is None else env
     if not os.path.isabs(target) or ".." in target.split(os.sep):
         return False
+    unresolved = os.path.normpath(target)
     real = os.path.realpath(target)
-    root = SCRATCH_ROOT
-    if not _under(real, SCRATCH_ROOT):
+    root, custom = SCRATCH_ROOT, False
+    if not (_under(real, SCRATCH_ROOT) and _under(unresolved, SCRATCH_ROOT)):
         tmpdir = env.get("TMPDIR")
         if not tmpdir or not os.path.isabs(tmpdir):
             return False
-        root = os.path.realpath(tmpdir)
-        if not _under(real, root) or inside_repository(root):
+        root, custom = os.path.realpath(tmpdir), True
+        if not _under(real, root) or inside_repository(root) or inside_repository(os.path.normpath(tmpdir)):
             return False
-    if inside_repository(real):
+    if inside_repository(unresolved) or inside_repository(real):
         return False
-    return not crosses_mount_under(real, root)
+    return scratch_root_ok(real, root, custom)
 
 GIT_DENY = {
     "commit", "add", "apply", "am", "cherry-pick", "merge", "rebase", "reset",
