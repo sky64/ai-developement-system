@@ -91,7 +91,16 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.6.0"'
+need .claude-plugin/plugin.json '"version": "0.6.1"'
+# Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
+need skills/orchestrator/SKILL.md "--spec-file"
+need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
+need README.md "/harness-enable"
+need tools/harness-enable-skill/SKILL.md "crew64@crew64"
+need tools/harness-enable-skill/enable.sh.tmpl "@CREW64_ENABLE@"
+need skills/orchestrator/SKILL.md "orca-version-check.sh"
+need docs/12-orca-setup.md "| Orca | 1.4.255"
+need AGENTS.md "test-orca-version-check.sh"
 need skills/orchestrator/SKILL.md "At rung 2, an escalation re-dispatches at rung 2"
 need skills/orchestrator/SKILL.md "model parameter of the Agent tool"
 need skills/orchestrator/SKILL.md "DeepSeek row where platform.hosts has an entry for the current host, otherwise the Claude row"

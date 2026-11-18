@@ -53,6 +53,129 @@ except Exception:  # a broken or partial plugin install must not crash the guard
 
 WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
+# The session scratchpad. A write tool may target /tmp or $TMPDIR from any
+# checkout (field fixes 2026-11-18): orchestrators write worker briefs there
+# and pass them with worker-start --spec-file. Same no-climb rule as the Bash
+# redirect check, realpath so a symlink out of /tmp into a repo is denied, never
+# inside a repository or its .git (a repository under /tmp stays a repository),
+# and never behind a mount nested in the scratch root (bind-mount aliases).
+SCRATCH_ROOT = "/tmp"
+
+
+def _under(path: str, root: str) -> bool:
+    real_root = os.path.realpath(root)
+    return path == real_root or path.startswith(real_root.rstrip(os.sep) + os.sep)
+
+
+def _git_admin_dir(path: str) -> bool:
+    """A git administration directory, recognised by shape without git
+    discovery: a HEAD file beside either objects/ and refs/ (a .git directory,
+    a separate or bare git dir) or a commondir file (a linked worktree's admin
+    dir, which borrows objects from the main repository; Codex cycle 3)."""
+    if not os.path.isfile(os.path.join(path, "HEAD")):
+        return False
+    if os.path.isfile(os.path.join(path, "commondir")):
+        return True
+    return (os.path.isdir(os.path.join(path, "objects"))
+            and os.path.isdir(os.path.join(path, "refs")))
+
+
+def inside_repository(path: str) -> bool:
+    """True when path (existing or not) is git metadata or lies under a
+    directory that holds a .git entry or is itself a git admin dir. Pure
+    filesystem walk: no git subprocess, so GIT_DIR, GIT_CEILING_DIRECTORIES
+    and the like cannot steer it (Codex review of PR 20, findings 1 and 2).
+    Callers pass both the unresolved and the resolved path, so a symlinked
+    .git or a separate git dir is caught on one side or the other. Any error
+    while looking counts as inside: the allowance fails closed."""
+    if ".git" in path.split(os.sep):
+        return True
+    probe = path
+    try:
+        while True:
+            if os.path.lexists(os.path.join(probe, ".git")) or _git_admin_dir(probe):
+                return True
+            parent = os.path.dirname(probe)
+            if parent == probe:
+                return False
+            probe = parent
+    except OSError:
+        return True
+
+
+def _mounts():
+    """(mount point, root within its filesystem, fstype) for every mount this
+    process sees, from /proc/self/mountinfo. None when it cannot be read."""
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return None
+    out = []
+    for line in lines:
+        head, sep, tail = line.partition(" - ")
+        fields = head.split(" ")
+        if not sep or len(fields) < 5:
+            continue
+        fstype = tail.split(" ")[0] if tail else ""
+        decoded = []
+        for raw in (fields[4], fields[3]):
+            for esc, ch in (("\\040", " "), ("\\011", "\t"), ("\\012", "\n"), ("\\134", "\\")):
+                raw = raw.replace(esc, ch)
+            decoded.append(raw)
+        out.append((os.path.realpath(decoded[0]), decoded[1], fstype))
+    return out
+
+
+SCRATCH_FSTYPES = {"tmpfs", "ramfs"}
+
+
+def scratch_root_ok(real_path: str, root: str, custom_root: bool) -> bool:
+    """Mount checks for a scratch target under root (Codex review of PR 20,
+    findings 3 and F2). realpath does not see bind mounts, so: (a) no mount
+    point other than root itself may sit between root and the target; (b) a
+    custom root ($TMPDIR) must live on a tmpfs or ramfs mount whose root is
+    "/", because a bind mount of a repository directory shows the source
+    filesystem's type and a non-root mount root. /tmp itself is trusted as the
+    spec's scratch root. Unreadable mountinfo denies."""
+    mounts = _mounts()
+    if mounts is None:
+        return False
+    real_root = os.path.realpath(root)
+    containing = None
+    for point, mount_root, fstype in mounts:
+        if point != real_root and _under(point, real_root) and _under(real_path, point):
+            return False
+        if _under(real_root, point) and (containing is None or len(point) > len(containing[0])):
+            containing = (point, mount_root, fstype)
+    if custom_root and containing is not None:
+        if containing[1] != "/" or containing[2] not in SCRATCH_FSTYPES:
+            return False
+    return True
+
+
+def scratch_target(target: str, env=None) -> bool:
+    """True when target is a session scratch path: absolute, no '..' segment,
+    under /tmp or under $TMPDIR (unresolved and resolved), not inside any
+    repository or git admin dir on either path, and clear of the mount checks
+    in scratch_root_ok. A TMPDIR inside a repository is ignored."""
+    env = os.environ if env is None else env
+    if not os.path.isabs(target) or ".." in target.split(os.sep):
+        return False
+    unresolved = os.path.normpath(target)
+    real = os.path.realpath(target)
+    root, custom = SCRATCH_ROOT, False
+    if not (_under(real, SCRATCH_ROOT) and _under(unresolved, SCRATCH_ROOT)):
+        tmpdir = env.get("TMPDIR")
+        if not tmpdir or not os.path.isabs(tmpdir):
+            return False
+        root, custom = os.path.realpath(tmpdir), True
+        if not _under(real, root) or inside_repository(root) or inside_repository(os.path.normpath(tmpdir)):
+            return False
+    if inside_repository(unresolved) or inside_repository(real):
+        return False
+    return scratch_root_ok(real, root, custom)
+
 GIT_DENY = {
     "commit", "add", "apply", "am", "cherry-pick", "merge", "rebase", "reset",
     "checkout", "switch", "restore", "rm", "mv", "push", "clean",
@@ -363,6 +486,10 @@ def decide(payload) -> int:
     cwd = payload.get("cwd") or os.getcwd()
     if tool not in WRITE_TOOLS and tool != "Bash":
         return 0
+    if tool in WRITE_TOOLS:
+        target = tool_input.get("file_path") or tool_input.get("notebook_path")
+        if isinstance(target, str) and scratch_target(target):
+            return 0
     if in_worktree(cwd):
         if tool in WRITE_TOOLS:
             reason = path_outside_cwd(cwd, tool_input)

@@ -11,6 +11,7 @@ printf '#!/usr/bin/env bash\necho "{}"\n' > "$TMP/orca-stub"; chmod +x "$TMP/orc
 export ORCA_CLI_COMMAND="$TMP/orca-stub"
 export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
+mkdir -p "$TMP/home-default"; export HOME="$TMP/home-default"   # the wrapper install never touches the real home
 fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }
@@ -144,6 +145,57 @@ printf '.claude/\n' > "$R16/.gitignore"; git -C "$R16" add .gitignore && git -C 
 bash "$ENABLE" "$R16" --no-commit >/dev/null 2>&1; rc1=$?
 bash "$ENABLE" "$R16" >/dev/null 2>&1; rc2=$?
 [ "$rc1" = 0 ] && [ "$rc2" = 0 ] && git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && ! git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && [ -z "$(git -C "$R16" status --porcelain)" ] && ok "tracked legacy config inside ignored .claude/ is renamed and committed across --no-commit and resume" || bad "legacy-in-ignored: rc1=$rc1 rc2=$rc2 HEAD=$(git -C "$R16" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R16" status --porcelain | tr '\n' ' ')"
+
+# 5h. CLAUDE.md is a symlink to AGENTS.md (new-repo convention): the orchestrator
+# line lands in AGENTS.md and that file is in the enable commit; the tree is clean.
+R20="$TMP/r20"; newrepo "$R20"; printf '# Rules\n' > "$R20/AGENTS.md"; ln -s AGENTS.md "$R20/CLAUDE.md"
+git -C "$R20" add AGENTS.md CLAUDE.md && git -C "$R20" commit -q -m "rules + symlink"
+out="$(bash "$ENABLE" "$R20" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && grep -q 'crew64:orchestrator' "$R20/AGENTS.md" && [ -L "$R20/CLAUDE.md" ] && [ -z "$(git -C "$R20" status --porcelain)" ] && git -C "$R20" show --stat HEAD | grep -q 'AGENTS.md' && ok "symlinked CLAUDE.md: AGENTS.md carries the line and is committed" || bad "symlink: rc=$rc status=$(git -C "$R20" status --porcelain | tr '\n' ' ') out=$out"
+# a symlink whose target is outside the repo is reported, not fatal
+R21="$TMP/r21"; newrepo "$R21"; printf 'x\n' > "$TMP/outside-rules.md"; ln -s "$TMP/outside-rules.md" "$R21/CLAUDE.md"; git -C "$R21" add CLAUDE.md && git -C "$R21" commit -q -m link
+out="$(bash "$ENABLE" "$R21" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"outside the repository"*) true;; *) false;; esac && ok "symlink outside the repo is reported and the run succeeds" || bad "outside symlink: rc=$rc out=$out"
+
+# 5i. the user-level harness-enable wrapper is installed, refreshed and left alone when current
+H="$TMP/home"; mkdir -p "$H"; R22="$TMP/r22"; newrepo "$R22"
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: installed"*) true;; *) false;; esac && [ -x "$H/.claude/skills/harness-enable/enable.sh" ] && grep -qF "$ENABLE" "$H/.claude/skills/harness-enable/enable.sh" && grep -q 'crew64@crew64' "$H/.claude/skills/harness-enable/SKILL.md" && ok "wrapper installed, points at this script" || bad "wrapper install: rc=$rc out=$(echo "$out" | grep skill)"
+s1="$(sha256sum "$H/.claude/skills/harness-enable/enable.sh" "$H/.claude/skills/harness-enable/SKILL.md" 2>/dev/null)"
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"
+case "$out" in *"skill: current"*) ok "second run reports the wrapper current";; *) bad "wrapper second run: $(echo "$out" | grep skill)";; esac
+[ -n "$s1" ] && [ "$s1" = "$(sha256sum "$H/.claude/skills/harness-enable/enable.sh" "$H/.claude/skills/harness-enable/SKILL.md" 2>/dev/null)" ] && ok "wrapper byte-identical after second run" || bad "wrapper rewritten"
+printf 'stale\n' > "$H/.claude/skills/harness-enable/enable.sh" 2>/dev/null
+out="$(HOME="$H" bash "$ENABLE" "$R22" 2>&1)"
+case "$out" in *"skill: refreshed"*) ok "stale wrapper is refreshed";; *) bad "wrapper refresh: $(echo "$out" | grep skill)";; esac
+out="$(HOME="$TMP/nohome" bash "$ENABLE" "$R22" --no-skill 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped (--no-skill)"*) true;; *) false;; esac && [ ! -e "$TMP/nohome/.claude" ] && ok "--no-skill skips the wrapper" || bad "--no-skill: rc=$rc out=$(echo "$out" | grep skill)"
+mkdir -p "$TMP/ro"; chmod 500 "$TMP/ro"
+out="$(HOME="$TMP/ro" bash "$ENABLE" "$R22" 2>&1)"; rc=$?; chmod 700 "$TMP/ro"
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && ok "unwritable HOME: wrapper skipped, run succeeds" || bad "ro HOME: rc=$rc out=$(echo "$out" | grep skill)"
+
+# 5j. (Codex cycle 1) the wrapper renders the canonical script path literally: a plugin
+# path with sed and shell metacharacters, and a plugin reached through a directory symlink.
+P="$TMP/plug|&and"; mkdir -p "$P"; cp -r "$ROOT/tools" "$ROOT/config" "$P/"
+H2="$TMP/home2"; mkdir -p "$H2"; R23="$TMP/r23"; newrepo "$R23"
+out="$(HOME="$H2" bash "$P/tools/crew64-enable.sh" "$R23" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && grep -q 'crew64@crew64' "$R23/.claude/settings.json" && ok "metacharacter plugin path: run succeeds and settings are written" || bad "meta path run: rc=$rc out=$(echo "$out" | head -3 | tr '\n' ' ')"
+real_meta="$(bash "$H2/.claude/skills/harness-enable/enable.sh" --print-real 2>/dev/null)"
+[ "$real_meta" = "$P/tools/crew64-enable.sh" ] && ok "wrapper points at the metacharacter path literally" || bad "wrapper real path: '$real_meta'"
+ln -s "$P" "$TMP/plug-alias"; H3="$TMP/home3"; mkdir -p "$H3"; R24="$TMP/r24"; newrepo "$R24"
+HOME="$H3" bash "$TMP/plug-alias/tools/crew64-enable.sh" "$R24" >/dev/null 2>&1
+real_alias="$(bash "$H3/.claude/skills/harness-enable/enable.sh" --print-real 2>/dev/null)"
+[ "$real_alias" = "$P/tools/crew64-enable.sh" ] && ok "wrapper records the physical script path, not the symlink alias" || bad "wrapper alias: '$real_alias'"
+
+# 5k. (Codex cycle 2, F3) a failing realpath must not install a wrapper with an empty path
+mkdir -p "$TMP/bin"; cat > "$TMP/bin/realpath" <<'RP'
+#!/usr/bin/env bash
+case "${!#}" in *tools/crew64-enable.sh) exit 1 ;; esac
+exec /usr/bin/realpath "$@"
+RP
+chmod +x "$TMP/bin/realpath"; H4="$TMP/home4"; mkdir -p "$H4"; R25="$TMP/r25"; newrepo "$R25"
+out="$(HOME="$H4" PATH="$TMP/bin:$PATH" bash "$ENABLE" "$R25" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && [ ! -e "$H4/.claude/skills/harness-enable/enable.sh" ] && ok "realpath failure: wrapper skipped, nothing installed, run succeeds" || bad "realpath failure: rc=$rc out=$(echo "$out" | grep skill) installed=$(ls "$H4/.claude/skills/harness-enable" 2>/dev/null | tr '\n' ' ')"
 
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
