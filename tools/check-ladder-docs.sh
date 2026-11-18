@@ -91,7 +91,7 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.6.0"'
+need .claude-plugin/plugin.json '"version": "0.6.1"'
 # Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
 need skills/orchestrator/SKILL.md "--spec-file"
 need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
