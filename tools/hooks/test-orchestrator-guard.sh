@@ -68,10 +68,24 @@ run 2 "$M" Write  '{"file_path":"/tmp/../etc/passwd","content":"hi"}'
 mkdir -p "$TMP/scratch"; ln -s "$M" "$TMP/scratch/repo"; ln -s "$TMP/scratch" "/tmp/guardtest-$$"
 run 2 "$M" Write  "{\"file_path\":\"/tmp/guardtest-$$/repo/x.md\",\"content\":\"hi\"}"   # symlink out of /tmp into the repo
 rm -f "/tmp/guardtest-$$"
-SCR="$(mktemp -d -p "${XDG_RUNTIME_DIR:-$HOME}" guardtest.XXXXXX)"   # outside /tmp, so only the TMPDIR rule can allow it
-runenv TMPDIR="$SCR" 0 "$M" Write "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                  # TMPDIR allowance
-run 2 "$M" Write  "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                                   # same path without TMPDIR: denied
-rmdir "$SCR"
+# A tmpfs directory outside /tmp for the positive TMPDIR cases (a custom scratch root must
+# be tmpfs or ramfs). XDG_RUNTIME_DIR, then /dev/shm; otherwise the positive cases are skipped.
+tmpfs_base=""
+for cand in "${XDG_RUNTIME_DIR:-}" /dev/shm; do
+  [ -n "$cand" ] && [ -d "$cand" ] && [ -w "$cand" ] && case "$(stat -f -c %T "$cand" 2>/dev/null)" in tmpfs|ramfs) tmpfs_base="$cand"; break;; esac
+done
+if [ -n "$tmpfs_base" ]; then
+  SCR="$(mktemp -d -p "$tmpfs_base" guardtest.XXXXXX)"   # outside /tmp, so only the TMPDIR rule can allow it
+  runenv TMPDIR="$SCR" 0 "$M" Write "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                  # TMPDIR allowance
+  runenv TMPDIR="$SCR" 0 "$M" Write "{\"file_path\":\"$SCR/new/dir/b.md\",\"content\":\"hi\"}"          # nonexistent parents
+  run 2 "$M" Write  "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"                                   # same path without TMPDIR: denied
+  rmdir "$SCR"
+else
+  echo "skip TMPDIR positive cases: no writable tmpfs outside /tmp (XDG_RUNTIME_DIR, /dev/shm)"
+fi
+SCRH="$(mktemp -d -p "$HOME" guardtest.XXXXXX)"
+runenv TMPDIR="$SCRH" 2 "$M" Write "{\"file_path\":\"$SCRH/b.md\",\"content\":\"hi\"}"                 # TMPDIR on a non-tmpfs filesystem: not scratch
+rmdir "$SCRH"
 runenv TMPDIR="$M/tmp" 2 "$M" Write "{\"file_path\":\"$M/tmp/b.md\",\"content\":\"hi\"}"              # TMPDIR inside the repo: ignored
 run 2 "$M" Write  '{"file_path":"tmp/b.md","content":"hi"}'                                             # relative: not scratch
 # Codex review of PR 20, cycle 1: git metadata, skewed git discovery and bind mounts are never scratch.
@@ -100,13 +114,20 @@ git init -q --separate-git-dir "$TMP/separate-meta" "$TMP/seprepo" && git -C "$T
 run 2 "$M" Write  "{\"file_path\":\"$TMP/separate-meta/config\",\"content\":\"hi\"}"             # F1: separate git dir
 run 2 "$M" Write  "{\"file_path\":\"$TMP/seprepo/.git\",\"content\":\"hi\"}"                      # F1: the .git file itself
 if unshare -Urm true 2>/dev/null; then
-  SCR2="$(mktemp -d -p "${XDG_RUNTIME_DIR:-$HOME}" guardtest.XXXXXX)"
+  SCR2="$(mktemp -d -p "${tmpfs_base:-$HOME}" guardtest.XXXXXX)"
   got="$(unshare -Urm bash -c "mount --bind '$M/docs' '$SCR2' && printf '{\"tool_name\":\"Write\",\"cwd\":\"%s\",\"tool_input\":{\"file_path\":\"%s\",\"content\":\"hi\"}}' '$M' '$SCR2/new/file' | TMPDIR='$SCR2' ORCHESTRATOR_GUARD= python3 -I '$HOOK' >/dev/null 2>&1; echo \$?")"
   [ "$got" = 2 ] && echo "ok   exit 2  Write under TMPDIR that is a bind mount of the repo (namespace)" || { echo "FAIL exit $got (want 2)  TMPDIR is a bind mount of a repo dir"; fail=1; }
   rmdir "$SCR2" 2>/dev/null
 else
   echo "skip TMPDIR bind-mount case: unshare -Urm unavailable"
 fi
+# Codex cycle 3: a linked worktree's admin dir (HEAD + commondir, no objects/) moved outside any .git ancestor.
+git -C "$M" worktree add -q "$TMP/wt5" -b wt5
+mv "$M/.git/worktrees/wt5" "$TMP/wt5-admin" && printf '%s\n' "$M/.git" > "$TMP/wt5-admin/commondir" && printf 'gitdir: %s\n' "$TMP/wt5-admin" > "$TMP/wt5/.git"
+git -C "$TMP/wt5" status --porcelain >/dev/null 2>&1 && echo "ok   fixture: relocated worktree admin dir is git-valid" || { echo "FAIL fixture: relocated admin dir not git-valid"; fail=1; }
+run 2 "$M" Write  "{\"file_path\":\"$TMP/wt5-admin/HEAD\",\"content\":\"hi\"}"                   # relocated admin dir, from main
+run 2 "$M" Write  "{\"file_path\":\"$TMP/wt5-admin/config-new\",\"content\":\"hi\"}"             # nonexistent descendant
+run 2 "$W" Write  "{\"file_path\":\"$TMP/wt5-admin/commondir\",\"content\":\"hi\"}"              # from a worktree
 
 # P1: orca exemption only for a single plain invocation.
 run 2 "$M" Bash   '{"command":"orca status; git add README.md"}'

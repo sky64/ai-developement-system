@@ -68,11 +68,15 @@ def _under(path: str, root: str) -> bool:
 
 
 def _git_admin_dir(path: str) -> bool:
-    """A git administration directory: HEAD file beside objects/ and refs/
-    (a .git directory, a linked worktree's admin dir, a separate or bare git
-    dir). Recognised by shape, without git discovery."""
-    return (os.path.isfile(os.path.join(path, "HEAD"))
-            and os.path.isdir(os.path.join(path, "objects"))
+    """A git administration directory, recognised by shape without git
+    discovery: a HEAD file beside either objects/ and refs/ (a .git directory,
+    a separate or bare git dir) or a commondir file (a linked worktree's admin
+    dir, which borrows objects from the main repository; Codex cycle 3)."""
+    if not os.path.isfile(os.path.join(path, "HEAD")):
+        return False
+    if os.path.isfile(os.path.join(path, "commondir")):
+        return True
+    return (os.path.isdir(os.path.join(path, "objects"))
             and os.path.isdir(os.path.join(path, "refs")))
 
 
