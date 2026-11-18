@@ -197,6 +197,42 @@ chmod +x "$TMP/bin/realpath"; H4="$TMP/home4"; mkdir -p "$H4"; R25="$TMP/r25"; n
 out="$(HOME="$H4" PATH="$TMP/bin:$PATH" bash "$ENABLE" "$R25" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && [ ! -e "$H4/.claude/skills/harness-enable/enable.sh" ] && ok "realpath failure: wrapper skipped, nothing installed, run succeeds" || bad "realpath failure: rc=$rc out=$(echo "$out" | grep skill) installed=$(ls "$H4/.claude/skills/harness-enable" 2>/dev/null | tr '\n' ' ')"
 
+# 5l. Decision 0009: the orchestrator line says "in the main checkout" and names
+# native mode. A repo enabled before 0.8.1 carries the old sentence; a re-run
+# rewrites exactly that line, keeps everything else, and commits it.
+NEW_TAIL='The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree.'
+OLD_LINE='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.'
+grep -qF -- "$NEW_TAIL" "$R/CLAUDE.md" && ! grep -qxF -- "$OLD_LINE" "$R/CLAUDE.md" && ok "first run writes the orchestrator line in its main-checkout wording" || bad "first-run line wording: $(cat "$R/CLAUDE.md")"
+# (a) the old line between other content: replaced in place, neighbours kept, committed
+R30="$TMP/r30"; newrepo "$R30"; printf 'intro line\n\n%s\n\noutro line\n' "$OLD_LINE" > "$R30/CLAUDE.md"
+git -C "$R30" add CLAUDE.md && git -C "$R30" commit -q -m "old crew64 line"
+out="$(bash "$ENABLE" "$R30" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"CLAUDE.md: orchestrator line updated"*) true;; *) false;; esac && ok "old orchestrator line: the run reports the update" || bad "old line report: rc=$rc out=$out"
+[ "$(grep -c 'crew64:orchestrator' "$R30/CLAUDE.md")" = 1 ] && grep -qF -- "$NEW_TAIL" "$R30/CLAUDE.md" && ! grep -qxF -- "$OLD_LINE" "$R30/CLAUDE.md" && ok "old orchestrator line is rewritten once to the new wording" || bad "old line rewrite: $(cat "$R30/CLAUDE.md")"
+[ "$(sed -n 1p "$R30/CLAUDE.md")" = "intro line" ] && [ "$(sed -n 5p "$R30/CLAUDE.md")" = "outro line" ] && [ "$(wc -l < "$R30/CLAUDE.md")" = 5 ] && ok "content around the line is kept, line for line" || bad "neighbours: $(cat -A "$R30/CLAUDE.md" | cut -c1-60)"
+[ -z "$(git -C "$R30" status --porcelain)" ] && git -C "$R30" show --stat HEAD | grep -q 'CLAUDE.md' && ok "the updated line is in the enable commit and the tree is clean" || bad "old line commit: $(git -C "$R30" status --porcelain)"
+# (b) a second run changes nothing
+before="$(sha256sum < "$R30/CLAUDE.md")"; n1="$(git -C "$R30" rev-list --count HEAD)"
+out="$(bash "$ENABLE" "$R30" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ "$(sha256sum < "$R30/CLAUDE.md")" = "$before" ] && [ "$(git -C "$R30" rev-list --count HEAD)" = "$n1" ] && case "$out" in *"orchestrator line already present"*) true;; *) false;; esac && ok "rerun after the update is a no-op" || bad "rerun after update: rc=$rc out=$out"
+# (c) a line the owner reworded is not the shipped line: left byte-identical
+R31="$TMP/r31"; newrepo "$R31"; printf 'Our orchestrator invokes the crew64:orchestrator skill. The orchestrator does not write or commit.\n' > "$R31/CLAUDE.md"
+git -C "$R31" add CLAUDE.md && git -C "$R31" commit -q -m "custom line"; before="$(sha256sum < "$R31/CLAUDE.md")"
+out="$(bash "$ENABLE" "$R31" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ "$(sha256sum < "$R31/CLAUDE.md")" = "$before" ] && case "$out" in *"orchestrator line already present"*) true;; *) false;; esac && ok "a reworded orchestrator line is left as the owner wrote it" || bad "custom line: rc=$rc out=$out"
+# (d) CLAUDE.md is a symlink to AGENTS.md: the old line is rewritten in AGENTS.md and committed
+R32="$TMP/r32"; newrepo "$R32"; printf '# Rules\n\n%s\n' "$OLD_LINE" > "$R32/AGENTS.md"; ln -s AGENTS.md "$R32/CLAUDE.md"
+git -C "$R32" add AGENTS.md CLAUDE.md && git -C "$R32" commit -q -m "rules + symlink + old line"
+out="$(bash "$ENABLE" "$R32" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ -L "$R32/CLAUDE.md" ] && grep -qF -- "$NEW_TAIL" "$R32/AGENTS.md" && ! grep -qxF -- "$OLD_LINE" "$R32/AGENTS.md" && [ -z "$(git -C "$R32" status --porcelain)" ] && git -C "$R32" show --stat HEAD | grep -q 'AGENTS.md' && ok "symlinked CLAUDE.md: the old line is rewritten in AGENTS.md and committed" || bad "symlink old line: rc=$rc status=$(git -C "$R32" status --porcelain) out=$out"
+# (e) the old line twice (a doubled paste): one new line remains
+R33="$TMP/r33"; newrepo "$R33"; printf '%s\nmiddle\n%s\n' "$OLD_LINE" "$OLD_LINE" > "$R33/CLAUDE.md"
+git -C "$R33" add CLAUDE.md && git -C "$R33" commit -q -m "old line twice"
+bash "$ENABLE" "$R33" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && [ "$(grep -c 'crew64:orchestrator' "$R33/CLAUDE.md")" = 1 ] && grep -qF -- "$NEW_TAIL" "$R33/CLAUDE.md" && grep -qx 'middle' "$R33/CLAUDE.md" && ok "a doubled old line collapses to one new line" || bad "doubled old line: $(cat "$R33/CLAUDE.md" | cut -c1-80)"
+# (f) the legacy ai-dev-system line migrates straight to the new wording
+grep -qF -- "$NEW_TAIL" "$R11/CLAUDE.md" && grep -qF -- "$NEW_TAIL" "$R13/CLAUDE.md" && ! grep -qxF -- "$OLD_LINE" "$R13/CLAUDE.md" && ok "legacy ai-dev-system lines end in the new wording" || bad "legacy to new wording: r11=$(cat "$R11/CLAUDE.md" | cut -c300-) r13=$(cat "$R13/CLAUDE.md" | cut -c300-)"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

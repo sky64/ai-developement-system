@@ -154,7 +154,12 @@ else
 fi
 
 # 2. CLAUDE.md orchestrator line
-line='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.'
+line_head='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill.'
+line="$line_head The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
+# The line as shipped before 0.8.1 (decision 0009 added native mode). Only this
+# exact line is rewritten on a re-run; a line the owner reworded is left alone.
+old_line="$line_head The orchestrator does not write or commit."
+legacy_replaced=0
 if [ -f "$repo/CLAUDE.md" ] && grep -qF "ai-dev-system:orchestrator" "$repo/CLAUDE.md"; then
   # Decision 0006: replace the legacy instruction in place rather than leaving a dead skill reference.
   python3 -I - "$repo/CLAUDE.md" "$line" <<'PY'
@@ -169,8 +174,27 @@ else:
 p.write_text(text)
 PY
   echo "CLAUDE.md: legacy orchestrator line replaced"
+  legacy_replaced=1
+fi
+if [ -f "$repo/CLAUDE.md" ] && grep -qxF -- "$old_line" "$repo/CLAUDE.md"; then
+  # Rewrite the first copy in place and drop any further copy (or every copy,
+  # when the current line is already there), so exactly one line remains.
+  python3 -I - "$repo/CLAUDE.md" "$old_line" "$line" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]); old, new = sys.argv[2], sys.argv[3]
+lines = p.read_text().split("\n")
+out, have_new = [], new in lines
+for entry in lines:
+    if entry != old:
+        out.append(entry)
+    elif not have_new:
+        out.append(new)
+        have_new = True
+p.write_text("\n".join(out))
+PY
+  echo "CLAUDE.md: orchestrator line updated (main-checkout wording, decision 0009)"
 elif [ -f "$repo/CLAUDE.md" ] && grep -qF "crew64:orchestrator" "$repo/CLAUDE.md"; then
-  echo "CLAUDE.md: orchestrator line already present"
+  [ "$legacy_replaced" = 1 ] || echo "CLAUDE.md: orchestrator line already present"
 else
   { [ -f "$repo/CLAUDE.md" ] && [ -s "$repo/CLAUDE.md" ] && printf '\n'; printf '%s\n' "$line"; } >> "$repo/CLAUDE.md"
   echo "CLAUDE.md: orchestrator line added"
