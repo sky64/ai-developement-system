@@ -141,6 +141,19 @@ need docs/templates/plan.md "## Tooling"
 
 need skills/plan-tooling/SKILL.md "name: plan-tooling"
 
+# Decision 0008: scout64, the read-only Haiku helper. Its tools line carries no
+# write tool, and its prompt makes "could not answer" a first-class result.
+need agents/scout64.md "model: haiku"
+need agents/scout64.md "tools: Read, Grep, Glob, Bash"
+need agents/scout64.md "could not answer"
+need agents/scout64.md "never write, edit, commit"
+forbid agents/scout64.md "Write,"
+forbid agents/scout64.md "Edit,"
+# The tools line is pinned whole: a substring pin would pass "..., Bash, Write".
+if ! grep -qxF -- "tools: Read, Grep, Glob, Bash" agents/scout64.md 2>/dev/null; then
+  echo "agents/scout64.md: the tools line must be exactly: tools: Read, Grep, Glob, Bash"; missing=$((missing + 1))
+fi
+
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.
 if ! python3 -I tools/crew64_config.py check config/crew64.defaults.json >/dev/null 2>&1; then
