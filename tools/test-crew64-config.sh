@@ -101,4 +101,57 @@ out="$(run "$M" get features.metering)"; [ "$out" = "none" ] && ok "features.met
 out="$(cd "$M" && CREW64_FEATURE_METERING=off python3 -I "$MOD" status 2>&1)"
 case "$out" in *"metering=none"*) ok "env override ignored for metering";; *) bad "metering env: $out";; esac
 
+# 15-20. limits.review_cycles (decision 0007)
+setlimit() { # <value-json|absent|empty> : write defaults with limits.review_cycles = value
+  mkdir -p "$M/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+if sys.argv[2]=="absent": d.pop("limits",None)
+elif sys.argv[2]=="empty": d["limits"]={}
+else: d["limits"]={"review_cycles": json.loads(sys.argv[2])}
+json.dump(d,open(sys.argv[3],"w"))' "$DEFAULTS" "$1" "$M/.claude/crew64.json"; }
+getlim() { (cd "$M" && python3 -I "$MOD" get limits.review_cycles 2>&1); }
+
+# 15. no limits block: default 2, status shows it after build_map, check passes
+setlimit absent
+out="$(getlim)"; [ "$out" = "2" ] && ok "get limits.review_cycles without limits → 2" || bad "no limits get: $out"
+out="$(run "$M" status)"; case "$out" in *"build_map=off review_cycles=2"*) ok "status shows review_cycles=2 after build_map";; *) bad "no limits status: $out";; esac
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check without limits → exit 0, silent" || bad "check no limits: rc=$rc out=$out"
+
+# 16. a file value is read
+setlimit 3
+out="$(getlim)"; [ "$out" = "3" ] && ok "limits.review_cycles 3 → 3" || bad "file value: $out"
+out="$(run "$M" status)"; case "$out" in *"review_cycles=3"*) ok "status shows review_cycles=3";; *) bad "file status: $out";; esac
+
+# 17. wrong types and zero fall back to the default; check names the key
+for v in true 0 2.0 '"3"'; do
+  setlimit "$v"; out="$(getlim)"; [ "$out" = "2" ] && ok "limits.review_cycles $v → default 2" || bad "bad value $v: $out"
+done
+setlimit true
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"limits.review_cycles"*) true;; *) false;; esac && ok "check review_cycles true → exit 1 names limits.review_cycles" || bad "check true: rc=$rc out=$out"
+
+# 18. an empty limits block: default, and check names the key
+setlimit empty
+out="$(getlim)"; [ "$out" = "2" ] && ok "empty limits → default 2" || bad "empty limits get: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"limits.review_cycles"*) true;; *) false;; esac && ok "check empty limits → exit 1 names limits.review_cycles" || bad "check empty: rc=$rc out=$out"
+
+# 19. env override beats the file only when it is a positive integer
+setlimit 3
+out="$(cd "$M" && CREW64_LIMIT_REVIEW_CYCLES=5 python3 -I "$MOD" get limits.review_cycles 2>&1)"
+[ "$out" = "5" ] && ok "CREW64_LIMIT_REVIEW_CYCLES=5 → 5" || bad "env 5: $out"
+for v in 0 -1 abc 2.5; do
+  out="$(cd "$M" && CREW64_LIMIT_REVIEW_CYCLES="$v" python3 -I "$MOD" get limits.review_cycles 2>&1)"
+  [ "$out" = "3" ] && ok "CREW64_LIMIT_REVIEW_CYCLES=$v → file value 3" || bad "env $v: $out"
+done
+
+# 20. an untrusted root's limit is not applied; unknown limit names exit 1
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["limits"]={"review_cycles": 9}; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/crew64.json"
+out="$(run "$M3" status)"
+case "$out" in *"config=untrusted:"*"review_cycles=2"*) ok "untrusted root keeps review_cycles=2";; *) bad "untrusted limit: $out";; esac
+out="$(cd "$M" && python3 -I "$MOD" get limits.bogus 2>&1)"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"unknown limit"*) true;; *) false;; esac && ok "get limits.bogus → exit 1 unknown limit" || bad "bogus limit: rc=$rc out=$out"
+
 exit $fail

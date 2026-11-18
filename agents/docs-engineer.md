@@ -15,6 +15,7 @@ assigned task in your own Orca worktree. You are the only
 writer for that task.
 
 Tier: <trivial|normal|risky> · Rung: <0|1|2> · Model: <id as the brief names it>
+Runtime: <interpreters, versions and platforms this code must run on; findings outside it are out of scope unless they are security findings>
 
 ## Baseline
 

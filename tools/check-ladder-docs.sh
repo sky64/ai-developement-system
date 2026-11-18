@@ -15,12 +15,18 @@ need() {
     missing=$((missing + 1))
   fi
 }
+forbid() {
+  local file="$1" phrase="$2"
+  if grep -qF -- "$phrase" "$file" 2>/dev/null; then
+    printf '%s: must not contain %s\n' "$file" "$phrase"; missing=$((missing + 1))
+  fi
+}
 
 need docs/05-delegation.md "## Model ladder"
 need docs/05-delegation.md "rung defaults to its tier"
 need docs/05-delegation.md "risky tier is always rung 2"
 need docs/05-delegation.md "never moved down a rung"
-need docs/05-delegation.md "at most two escalations"
+need docs/05-delegation.md 'at most `limits.review_cycles` escalations'
 need docs/05-delegation.md "identical at every rung"
 need docs/05-delegation.md "only through a new decision record"
 need docs/05-delegation.md "docs/12-orca-setup.md records a working dsh"
@@ -30,7 +36,8 @@ need docs/05-delegation.md "## Ladder review"
 need docs/05-delegation.md "gpt-6.1-sol"
 need docs/05-delegation.md "reported to the owner and corrected by a decision record"
 need docs/05-delegation.md "At rung 2, an escalation re-dispatches at rung 2"
-need docs/05-delegation.md "one allowance of two per task"
+need docs/05-delegation.md 'one allowance of `limits.review_cycles` per task'
+need docs/05-delegation.md 'up to `limits.review_cycles` correction cycles (default 2)'
 need docs/05-delegation.md 'DeepSeek row where `platform.hosts` has an entry for the host, otherwise the Claude row'
 # Decision 0005: portability
 need docs/05-delegation.md ".claude/crew64.json"
@@ -53,7 +60,8 @@ need docs/05-delegation.md "Rung: <n>; Model: <id>; Tokens: <in>/<out>"
 need docs/05-delegation.md "no Claude Code skills or hooks"
 
 need AGENTS.md "complexity rung"
-need AGENTS.md "one allowance of two per task"
+need AGENTS.md 'one allowance of `limits.review_cycles` per task'
+need AGENTS.md "one budget, not three"
 
 need skills/orchestrator/SKILL.md "Rung:"
 need skills/orchestrator/SKILL.md "--model"
@@ -62,7 +70,28 @@ need skills/orchestrator/SKILL.md "rung 1"
 need skills/orchestrator/SKILL.md "one rung higher"
 need skills/orchestrator/SKILL.md "budget"
 need skills/orchestrator/SKILL.md "Risky is always rung 2"
-need skills/orchestrator/SKILL.md "After two escalations"
+need skills/orchestrator/SKILL.md "When the allowance is spent"
+need skills/orchestrator/SKILL.md "limits.review_cycles"
+need skills/orchestrator/SKILL.md "CREW64_LIMIT_REVIEW_CYCLES"
+need skills/orchestrator/SKILL.md "grants one more cycle"
+need config/crew64.defaults.json '"review_cycles": 2'
+need config/examples/orca-solvela.json '"review_cycles": 3'
+# Decision 0007: the literal allowance of two is gone from live policy.
+forbid AGENTS.md "allowance of two"
+forbid docs/05-delegation.md "allowance of two"
+forbid docs/05-delegation.md "at most two escalations"
+forbid docs/05-delegation.md "up to two correction cycles"
+forbid skills/orchestrator/SKILL.md "allowance of two"
+forbid skills/orchestrator/SKILL.md "After two escalations"
+forbid skills/orchestrator/SKILL.md "two-cycle allowance"
+# Decision 0007: every brief names the runtime floor the review applies to.
+need agents/specialist-agent.md.tmpl "Runtime:"
+need agents/docs-engineer.md "Runtime:"
+need skills/orchestrator/SKILL.md "Runtime:"
+need skills/orchestrator/SKILL.md "outside that floor are out of scope"
+need docs/05-delegation.md "Runtime:"
+need AGENTS.md "Python 3.13+"
+need .claude-plugin/plugin.json '"version": "0.6.0"'
 need skills/orchestrator/SKILL.md "At rung 2, an escalation re-dispatches at rung 2"
 need skills/orchestrator/SKILL.md "model parameter of the Agent tool"
 need skills/orchestrator/SKILL.md "DeepSeek row where platform.hosts has an entry for the current host, otherwise the Claude row"
@@ -115,12 +144,6 @@ print(" ".join(sorted(ids)))' 2>/dev/null); do
   need docs/05-delegation.md "$id"
 done
 # No owner-specific identity in stranger-facing docs.
-forbid() {
-  local file="$1" phrase="$2"
-  if grep -qF -- "$phrase" "$file" 2>/dev/null; then
-    printf '%s: must not contain %s\n' "$file" "$phrase"; missing=$((missing + 1))
-  fi
-}
 forbid docs/11-plugin-install.md "Solvela-bot"
 
 if [ "$missing" -ne 0 ]; then

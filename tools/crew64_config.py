@@ -5,6 +5,7 @@ Importable by the guard hook, callable as a CLI by the bot scripts and the
 orchestrator. Standard library only.
 
     python3 -I tools/crew64_config.py get <dotted.key>   value, or exit 1
+                                       (features.<name> and limits.<name> apply the fallbacks)
     python3 -I tools/crew64_config.py status              one status line
     python3 -I tools/crew64_config.py check <path>        validate, exit 1 + reasons
 
@@ -17,6 +18,10 @@ Rules:
   every reader falls back to the shipped defaults (fail closed for the guard).
 - Environment overrides CREW64_FEATURE_<NAME>=on|off beat the file;
   ORCHESTRATOR_GUARD=off is an alias for the orchestrator_guard switch.
+- Limits (decision 0007): limits.<name> is an integer of at least 1.
+  CREW64_LIMIT_<NAME>=<n> beats the file when it parses as such; any other
+  value, in the environment or the file (booleans included), falls through
+  to the next source and finally to the shipped default.
 """
 import json
 import os
@@ -28,6 +33,8 @@ VERSION = 1
 BOOL_FEATURES = ("orchestrator_guard", "model_ladder", "bot_identity", "build_map")
 METERING_KINDS = ("none", "solvela", "openai-compatible")
 ENV_PREFIX = "CREW64_FEATURE_"
+LIMITS = ("review_cycles",)
+LIMIT_ENV_PREFIX = "CREW64_LIMIT_"
 
 
 def _defaults_path() -> str:
@@ -183,6 +190,37 @@ def feature(cfg, name: str, env=None):
     return defaults()["features"].get(name)
 
 
+def _positive_int(value):
+    """value when it is an int (not a bool) of at least 1, else None."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if value >= 1 else None
+
+
+def _env_limit(name: str, env):
+    raw = env.get(LIMIT_ENV_PREFIX + name.upper())
+    if raw is None:
+        return None
+    try:
+        return _positive_int(int(raw.strip()))
+    except ValueError:
+        return None
+
+
+def limit(cfg, name: str, env=None) -> int:
+    """Limit value: env override, then the file, then the shipped default.
+    Every source must be an integer of at least 1 or it is skipped."""
+    env = os.environ if env is None else env
+    from_env = _env_limit(name, env)
+    if from_env is not None:
+        return from_env
+    if isinstance(cfg, dict) and isinstance(cfg.get("limits"), dict):
+        from_file = _positive_int(cfg["limits"].get(name))
+        if from_file is not None:
+            return from_file
+    return defaults()["limits"][name]
+
+
 def deviations(cfg: dict, base: dict):
     """Dotted keys under models whose value differs from base."""
     out = []
@@ -225,6 +263,7 @@ def status_line(cfg, cwd: str) -> str:
         f" bot={_onoff(feature(cfg, 'bot_identity'))}"
         f" metering={feature(cfg, 'metering')}"
         f" build_map={_onoff(feature(cfg, 'build_map'))}"
+        f" review_cycles={limit(cfg, 'review_cycles')}"
         f" platform={platform.get('kind', 'orca')}"
         f" hosts={','.join(sorted(hosts)) if hosts else 'none'}"
         f" gateway={gateway.get('kind', 'none')}"
@@ -248,6 +287,14 @@ def check(data) -> list:
                 problems.append(f"features.{name} must be true or false")
         if feats.get("metering") not in METERING_KINDS:
             problems.append(f"features.metering must be one of {', '.join(METERING_KINDS)}")
+    if "limits" in data:
+        limits = data.get("limits")
+        if not isinstance(limits, dict):
+            problems.append("limits must be an object")
+        else:
+            for name in LIMITS:
+                if _positive_int(limits.get(name)) is None:
+                    problems.append(f"limits.{name} must be an integer of at least 1")
     platform = data.get("platform")
     if not isinstance(platform, dict) or not isinstance(platform.get("kind"), str):
         problems.append("platform.kind must be a string")
@@ -313,6 +360,13 @@ def cli(argv) -> int:
                 sys.stderr.write(f"crew64_config: unknown feature {key}\n")
                 return 1
             _print_value(value)
+            return 0
+        if key.startswith("limits."):
+            name = key[len("limits."):]
+            if name not in LIMITS:
+                sys.stderr.write(f"crew64_config: unknown limit {key}\n")
+                return 1
+            _print_value(limit(cfg, name))
             return 0
         try:
             _print_value(_get(cfg if cfg is not None else defaults(), key))
