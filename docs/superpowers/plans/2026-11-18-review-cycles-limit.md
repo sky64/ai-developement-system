@@ -205,7 +205,7 @@ git commit -m "docs(policy): the per-task allowance is limits.review_cycles (dec
 
 **Files:**
 - Modify: `agents/specialist-agent.md.tmpl:13` (add a line after the Tier line)
-- Modify: `agents/docs-engineer.md:17` and `.claude/agents/docs-engineer.md` (same line; the two files are kept identical)
+- Modify: `agents/docs-engineer.md:17` (the plugin's portable role; `.claude/agents/docs-engineer.md` is this repo's own agent without a Tier line and is left alone)
 - Modify: `skills/orchestrator/SKILL.md`, `## Delegation` (one bullet) and the Platform seam table's "hand a diff to a reviewer" row
 - Modify: `AGENTS.md:30-38` (`## Verification for this repository`, one bullet)
 - Modify: `docs/05-delegation.md:109-151` (Specialist agent template section mirrors the template file; add the same line)
@@ -227,8 +227,6 @@ need AGENTS.md "Python 3.13+"
 need .claude-plugin/plugin.json '"version": "0.6.0"'
 ```
 
-Also add, below the existing defaults-file check: `cmp -s agents/docs-engineer.md .claude/agents/docs-engineer.md || { echo "agents/docs-engineer.md differs from .claude/agents/docs-engineer.md"; missing=$((missing + 1)); }`.
-
 - [ ] **Step 2: Run to verify it fails**
 
 Run: `bash tools/check-ladder-docs.sh; echo exit=$?`
@@ -236,7 +234,7 @@ Expected: the seven new pins listed as missing, `exit=1`.
 
 - [ ] **Step 3: Edit the sites**
 
-- Template, docs-engineer (both copies) and the docs/05 template section, new line after the Tier line: ``Runtime: <interpreters, versions and platforms this code must run on; findings outside it are out of scope unless they are security findings>``.
+- Template, `agents/docs-engineer.md` and the docs/05 template section, new line after the Tier line: ``Runtime: <interpreters, versions and platforms this code must run on; findings outside it are out of scope unless they are security findings>``.
 - `skills/orchestrator/SKILL.md`, `## Delegation`, new bullet after "Name the tier, base commit, files...": "Every brief, and every reviewer brief in particular, carries `Runtime: <floor>`, taken from the application repository's AGENTS.md or CLAUDE.md, or stated by the orchestrator when they are silent. Tell the reviewer that findings about code paths outside that floor are out of scope unless they are security findings. This is what keeps correction cycles off code that never runs."
 - Platform seam table, "hand a diff to a reviewer" row: append ", and the `Runtime:` floor" to the spec contents.
 - `AGENTS.md` Verification section, new first bullet: "Runtime floor for this repository: Python 3.13+ and bash on Linux. Reviewer briefs for this repository state it; findings about older interpreters are out of scope unless they are security findings."
@@ -250,7 +248,7 @@ Expected: `ladder docs OK`, plugin valid, `OK`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add agents .claude/agents skills/orchestrator/SKILL.md AGENTS.md docs/05-delegation.md .claude-plugin/plugin.json tools/check-ladder-docs.sh
+git add agents skills/orchestrator/SKILL.md AGENTS.md docs/05-delegation.md .claude-plugin/plugin.json tools/check-ladder-docs.sh
 git commit -m "feat(briefs): reviewer briefs name the runtime floor; plugin 0.6.0"
 ```
 
