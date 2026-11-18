@@ -30,7 +30,10 @@ import sys
 
 CONFIG_REL = os.path.join(".claude", "crew64.json")
 VERSION = 1
-BOOL_FEATURES = ("orchestrator_guard", "model_ladder", "bot_identity", "build_map")
+BOOL_FEATURES = ("orchestrator_guard", "model_ladder", "bot_identity", "build_map", "scout64")
+# Switches added after the first release: a config without the key validates
+# and reads as the shipped default, so repos enabled earlier keep working.
+OPTIONAL_FEATURES = ("scout64",)
 METERING_KINDS = ("none", "solvela", "openai-compatible")
 ENV_PREFIX = "CREW64_FEATURE_"
 LIMITS = ("review_cycles",)
@@ -264,6 +267,7 @@ def status_line(cfg, cwd: str) -> str:
         f" metering={feature(cfg, 'metering')}"
         f" build_map={_onoff(feature(cfg, 'build_map'))}"
         f" review_cycles={limit(cfg, 'review_cycles')}"
+        f" scout64={_onoff(feature(cfg, 'scout64'))}"
         f" platform={platform.get('kind', 'orca')}"
         f" hosts={','.join(sorted(hosts)) if hosts else 'none'}"
         f" gateway={gateway.get('kind', 'none')}"
@@ -283,6 +287,8 @@ def check(data) -> list:
         problems.append("features must be an object")
     else:
         for name in BOOL_FEATURES:
+            if name in OPTIONAL_FEATURES and name not in feats:
+                continue
             if not isinstance(feats.get(name), bool):
                 problems.append(f"features.{name} must be true or false")
         if feats.get("metering") not in METERING_KINDS:

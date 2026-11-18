@@ -21,6 +21,74 @@ forbid() {
     printf '%s: must not contain %s\n' "$file" "$phrase"; missing=$((missing + 1))
   fi
 }
+agent_fields() { # file field... : the agent file's frontmatter is exactly these fields
+  # A field is "key=value" (the line must read exactly "key: value") or "key"
+  # (free text, which must be a folded block: "key: >-", then one or more
+  # lines indented by exactly two spaces). The frontmatter is held to one
+  # canonical form, so that what this check sees is what any YAML parser sees
+  # and nothing in it can be malformed YAML (Claude Code drops every field of
+  # an agent whose frontmatter does not parse, the model and tools limits
+  # included): "---" on line 1 and a closing "---"; inside, only those lines,
+  # each key once, no key outside the listed set, printable ASCII only.
+  # Anything else is rejected rather than interpreted: quoted or spaced keys,
+  # comments, inline free text, continuation lines, nested values, blank or
+  # uneven block lines, carriage returns and Unicode line breaks.
+  local out
+  if ! out="$(python3 -I -c '
+import re, sys
+
+path, wanted = sys.argv[1], [a.partition("=") for a in sys.argv[2:]]
+
+
+def fail(msg):
+    print(f"{path}: {msg}")
+    sys.exit(1)
+
+
+try:
+    with open(path, "rb") as fh:
+        raw = fh.read().split(b"\n")
+except OSError as exc:
+    fail(f"cannot read the agent file: {exc}")
+if raw[0] != b"---":
+    fail("no frontmatter block on line 1")
+if b"---" not in raw[1:]:
+    fail("the frontmatter block is not closed")
+block = raw[1:raw.index(b"---", 1)]
+for number, line in enumerate(block, start=2):
+    if any(byte < 0x20 or byte > 0x7E for byte in line):
+        fail(f"line {number}: only printable ASCII is accepted in the frontmatter")
+fields, folded_lines, folded = {}, {}, None
+for number, line in enumerate((line.decode("ascii") for line in block), start=2):
+    plain = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*): (\S.*)", line)
+    if plain:
+        key, value = plain.groups()
+        if key in fields:
+            fail(f"line {number}: frontmatter key {key} is declared twice")
+        fields[key] = value
+        folded = key if value == ">-" else None
+        if folded:
+            folded_lines[key] = 0
+    elif folded and re.fullmatch(r"  \S.*", line):
+        folded_lines[folded] += 1
+    else:
+        fail(f"line {number}: not a plain key: value line, nor a two-space line of a folded block")
+allowed = [key for key, _, _ in wanted]
+for key in fields:
+    if key not in allowed:
+        fail(f"frontmatter key {key} is not one of: {", ".join(allowed)}")
+for key, pinned, value in wanted:
+    if key not in fields:
+        fail(f"frontmatter must carry the field {key}")
+    if pinned and fields[key] != value:
+        fail(f"frontmatter must carry exactly: {key}: {value}")
+    if not pinned and not folded_lines.get(key):
+        fail(f"frontmatter field {key} must be a folded block: a >- line, then lines indented by two spaces")
+' "$@" 2>&1)"; then
+    printf '%s\n' "$out"
+    missing=$((missing + 1))
+  fi
+}
 
 need docs/05-delegation.md "## Model ladder"
 need docs/05-delegation.md "rung defaults to its tier"
@@ -91,7 +159,7 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.6.1"'
+need .claude-plugin/plugin.json '"version": "0.7.0"'
 # Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
 need skills/orchestrator/SKILL.md "--spec-file"
 need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
@@ -140,6 +208,27 @@ need docs/templates/plan.md "## Owner items"
 need docs/templates/plan.md "## Tooling"
 
 need skills/plan-tooling/SKILL.md "name: plan-tooling"
+
+# Decision 0008: scout64, the read-only Haiku helper. Its tools field carries no
+# write tool, and its prompt makes "could not answer" a first-class result. The
+# frontmatter is pinned as a whole: exactly these four fields, so no other
+# field can widen what the scout may do, and matching text elsewhere in the
+# file does not satisfy the pin (tools/test-check-ladder-docs.sh).
+agent_fields agents/scout64.md name=scout64 description model=haiku "tools=Read, Grep, Glob, Bash"
+need agents/scout64.md "could not answer"
+need agents/scout64.md "never write, edit, commit"
+forbid agents/scout64.md "Write,"
+forbid agents/scout64.md "Edit,"
+# Decision 0008: the rule. The skill states both the on and the off behaviour,
+# so an off switch never leaves the orchestrator without a rule.
+need skills/orchestrator/SKILL.md "crew64:scout64"
+need skills/orchestrator/SKILL.md "When the scout's first line is"
+need skills/orchestrator/SKILL.md "With \`features.scout64\` off"
+need docs/05-delegation.md "crew64:scout64"
+need README.md "features.scout64"
+need config/crew64.defaults.json '"scout64": true'
+forbid skills/orchestrator/SKILL.md "Native read-only subagents run on the rung 1 model from the table"
+forbid docs/05-delegation.md "read-only native subagents run at rung 1 by default, and at rung 2 only"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.

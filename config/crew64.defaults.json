@@ -5,7 +5,8 @@
     "model_ladder": true,
     "bot_identity": false,
     "metering": "none",
-    "build_map": false
+    "build_map": false,
+    "scout64": true
   },
   "limits": {
     "review_cycles": 2

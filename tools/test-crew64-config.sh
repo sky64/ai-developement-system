@@ -154,4 +154,34 @@ case "$out" in *"config=untrusted:"*"review_cycles=2"*) ok "untrusted root keeps
 out="$(cd "$M" && python3 -I "$MOD" get limits.bogus 2>&1)"; rc=$?
 [ "$rc" = 1 ] && case "$out" in *"unknown limit"*) true;; *) false;; esac && ok "get limits.bogus → exit 1 unknown limit" || bad "bogus limit: rc=$rc out=$out"
 
+# 21-22. features.scout64 (decision 0008): default true, optional in validation
+dropfeat() { # <feature> : write defaults with features.<feature> removed
+  mkdir -p "$M/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1])); d["features"].pop(sys.argv[2],None); json.dump(d,open(sys.argv[3],"w"))' "$DEFAULTS" "$1" "$M/.claude/crew64.json"; }
+
+# 21. no scout64 key (every repo enabled before 0.7.0): reads as true, status
+# shows it after review_cycles, check passes; a file value and the env override are read
+dropfeat scout64
+out="$(run "$M" get features.scout64)"; [ "$out" = "true" ] && ok "get features.scout64 without the key → true" || bad "scout64 absent get: $out"
+out="$(run "$M" status)"; case "$out" in *"review_cycles=2 scout64=on"*) ok "status shows scout64=on after review_cycles";; *) bad "scout64 absent status: $out";; esac
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check without features.scout64 → exit 0, silent" || bad "check scout64 absent: rc=$rc out=$out"
+setfeat 'false' scout64
+out="$(run "$M" get features.scout64)"; [ "$out" = "false" ] && ok "features.scout64 false → false" || bad "scout64 false get: $out"
+out="$(run "$M" status)"; case "$out" in *"scout64=off"*) ok "status shows scout64=off";; *) bad "scout64 false status: $out";; esac
+setfeat 'true' scout64
+out="$(cd "$M" && CREW64_FEATURE_SCOUT64=off python3 -I "$MOD" get features.scout64 2>&1)"
+[ "$out" = "false" ] && ok "CREW64_FEATURE_SCOUT64=off beats a file true → false" || bad "scout64 env: $out"
+
+# 22. a non-boolean value reads as the default true and check names the key;
+# the shipped example validates
+setfeat '"off"' scout64
+out="$(run "$M" get features.scout64)"; [ "$out" = "true" ] && ok 'features.scout64 "off" (string) → default true' || bad "scout64 string get: $out"
+out="$(run "$M" status)"; case "$out" in *"scout64=on"*) ok "status shows scout64=on for a string value";; *) bad "scout64 string status: $out";; esac
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"features.scout64"*) true;; *) false;; esac && ok "check scout64 string → exit 1 names features.scout64" || bad "check scout64 string: rc=$rc out=$out"
+out="$(run "$M" check "$EXAMPLE")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check example with scout64 → exit 0, silent" || bad "check example scout64: rc=$rc out=$out"
+
 exit $fail

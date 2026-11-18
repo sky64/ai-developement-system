@@ -37,7 +37,7 @@ There is no application build or package dependency installation at present.
 - Run `bash tools/hooks/test-orchestrator-guard.sh`.
 - Run `bash tools/test-crew64-config.sh`, `bash tools/bot/test-bot-scripts.sh`, `bash tools/test-crew64-enable.sh` and `bash tools/test-orca-version-check.sh` when the config reader, the bot scripts, harness-enable or the Orca version check change.
 - Run `claude plugin validate .` when plugin files change.
-- Run `bash tools/check-ladder-docs.sh` when the ladder, templates or the orchestrator skill change.
+- Run `bash tools/check-ladder-docs.sh` when the ladder, templates or the orchestrator skill change, and `bash tools/test-check-ladder-docs.sh` when that script or an agent file's frontmatter pins change.
 - Check changed Markdown links and code fences.
 - Test behavior when adding executable functionality. CLI help, file presence, and login status are not an end-to-end agent test.
 
