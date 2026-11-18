@@ -91,7 +91,7 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.6.1"'
+need .claude-plugin/plugin.json '"version": "0.7.0"'
 # Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
 need skills/orchestrator/SKILL.md "--spec-file"
 need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
@@ -153,6 +153,16 @@ forbid agents/scout64.md "Edit,"
 if ! grep -qxF -- "tools: Read, Grep, Glob, Bash" agents/scout64.md 2>/dev/null; then
   echo "agents/scout64.md: the tools line must be exactly: tools: Read, Grep, Glob, Bash"; missing=$((missing + 1))
 fi
+# Decision 0008: the rule. The skill states both the on and the off behaviour,
+# so an off switch never leaves the orchestrator without a rule.
+need skills/orchestrator/SKILL.md "crew64:scout64"
+need skills/orchestrator/SKILL.md "When the scout's first line is"
+need skills/orchestrator/SKILL.md "With \`features.scout64\` off"
+need docs/05-delegation.md "crew64:scout64"
+need README.md "features.scout64"
+need config/crew64.defaults.json '"scout64": true'
+forbid skills/orchestrator/SKILL.md "Native read-only subagents run on the rung 1 model from the table"
+forbid docs/05-delegation.md "read-only native subagents run at rung 1 by default, and at rung 2 only"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.

@@ -42,14 +42,14 @@ Rules:
 
 - A task dispatched outside any plan carries tier and rung in its brief, and its rung defaults to its tier (trivial 0, normal 1, risky 2). That default is the whole rule; the orchestrator does not weigh complexity in the moment.
 - The risky tier is always rung 2, whatever the complexity. Nothing else couples the two axes.
-- The orchestrator's read-only native subagents run at rung 1 by default, and at rung 2 only when the question being researched is itself risky-tier. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
+- The orchestrator's read-only native subagents go to `crew64:scout64` at rung 0 when `features.scout64` is on, and climb to rung 1 only when the scout reports it could not answer ([decision 0008](decisions/0008-scout64.md)). With the switch off they run at rung 1 by default. Either way, a question that is itself risky-tier goes to rung 2. The orchestrator session itself stays on the top Claude model, because it holds the plan and the risk calls.
 
 The ladder table. The ids below are the shipped defaults in `config/crew64.defaults.json`; a repository's `models` block in `.claude/crew64.json` may override them, and the orchestrator reports every deviation in its session status line. Model ids were taken from the installed CLIs on 2026-11-17; each cell is re-checked against `claude --help`, `codex --help`, `orca orchestration worker-start --help` and the `dsh` profiles on the day a plan is written, and a cell that no longer resolves is reported to the owner and corrected by a decision record that changes only that id. A plan never corrects the table.
 
 | Role | Rung 0 | Rung 1 | Rung 2 |
 |---|---|---|---|
 | Orchestrator session | not applicable | not applicable | top Claude model (`claude-opus-5-5`) |
-| Research and read-only subagents (native, inside the orchestrator; set with the Agent tool's `model` parameter) | `claude-haiku-5-5` (`haiku`) | `claude-sonnet-5-5` (`sonnet`) | `claude-opus-5-5` (`opus`) |
+| Research and read-only subagents (native, inside the orchestrator; `crew64:scout64` at rung 0 when `features.scout64` is on, otherwise the Agent tool's `model` parameter) | `claude-haiku-5-5` (`haiku`) | `claude-sonnet-5-5` (`sonnet`) | `claude-opus-5-5` (`opus`) |
 | Implementer, Claude worker (Orca `--model`) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
 | Implementer, DeepSeek worker (`dsh` profile named in the brief) | cheapest `dsh` profile | standard `dsh` profile (`deepseek-v4-pro` today) | not used; rung 2 implementation goes to the Claude row |
 | Reviewer, Codex worker (Orca `--model gpt-6.1-sol --effort`; no Claude Code skills or hooks) | no reviewer at trivial tier; otherwise `--effort low` | `--effort medium` | `--effort high` |
