@@ -43,7 +43,7 @@ Decision 0005: every feature has a switch in the repository's `.claude/crew64.js
 | start an agent with a brief and a model | `orca orchestration worker-start --spec "<brief>" --worktree id:<id> --agent <id> --model <id> [--effort <level>] --json` |
 | wait for completion | `orca orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json` |
 | read its result | the `worker_done` message, or `orca orchestration worker-read --dispatch <id> --json` |
-| hand a diff to a reviewer | `worker-start --agent codex` with base and head SHAs, changed files, acceptance criteria and check results in the spec |
+| hand a diff to a reviewer | `worker-start --agent codex` with base and head SHAs, changed files, acceptance criteria, check results and the `Runtime:` floor in the spec |
 
 Another platform is another table in this section, selected by `platform.kind`; the policy above the table does not change. `platform.hosts` lists, per host, which extra agents it runs (today: the DeepSeek `dsh` agent id and its profiles per rung).
 
@@ -55,6 +55,7 @@ Another platform is another table in this section, selected by `platform.kind`; 
 - Native subagents are allowed for read-only investigation only. Anything that writes runs as an Orca worker.
 - The orchestrator does not write or commit. The direct-edit exception in the plugin AGENTS.md applies only when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
 - Name the tier, base commit, files, acceptance criteria, and limits in every brief, as docs/05 requires. Name the rung and model too; see Rungs and models below.
+- Every brief, and every reviewer brief in particular, carries `Runtime: <floor>`: the interpreters, versions and platforms the code must run on, taken from the application repository's AGENTS.md or CLAUDE.md, or stated by the orchestrator when they are silent. Tell the reviewer that findings about code paths outside that floor are out of scope unless they are security findings. This is what keeps correction cycles off code that never runs (decision 0007).
 - Name the worker's role explicitly in the brief (for example "You are the implementer" or "You are the reviewer"), so the worker does not take the orchestrator role.
 - Update the Orca workspace comment at checkpoints: `orca worktree set --worktree active --comment "<status>" --json`.
 

@@ -31,6 +31,7 @@ Read README.md and docs/12-orca-setup.md for the current setup state. docs/05-de
 
 There is no application build or package dependency installation at present.
 
+- Runtime floor for this repository: Python 3.13+ and bash on Linux. Reviewer briefs for this repository state it; findings about older interpreters are out of scope unless they are security findings.
 - Run `git diff --check` for changes.
 - Run `bash -n` for shell scripts under tools/ and `python3 -m py_compile tools/hooks/orchestrator-guard.py` when they change.
 - Run `bash tools/hooks/test-orchestrator-guard.sh`.
