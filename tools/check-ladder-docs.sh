@@ -273,6 +273,9 @@ need docs/05-delegation.md "# Delegation policy: the orchestrator does not write
 need tools/crew64-enable.sh "The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
 need docs/11-plugin-install.md "The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
 forbid docs/11-plugin-install.md "The orchestrator does not write or commit."
+# This repository's own CLAUDE.md agrees with AGENTS.md on native mode.
+need CLAUDE.md "in the main checkout"
+forbid CLAUDE.md "does not write code; specialists implement"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.

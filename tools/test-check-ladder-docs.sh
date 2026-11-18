@@ -12,7 +12,7 @@ bad() { echo "FAIL $1"; fail=1; }
 fresh() { # a pristine copy of the files the checker reads
   rm -rf "$COPY"; mkdir -p "$COPY"
   cp -r "$ROOT/agents" "$ROOT/config" "$ROOT/docs" "$ROOT/skills" "$ROOT/tools" \
-        "$ROOT/.claude-plugin" "$ROOT/AGENTS.md" "$ROOT/README.md" "$COPY/"
+        "$ROOT/.claude-plugin" "$ROOT/AGENTS.md" "$ROOT/CLAUDE.md" "$ROOT/README.md" "$COPY/"
 }
 check() { out="$(bash "$COPY/tools/check-ladder-docs.sh" 2>&1)"; rc=$?; }
 rejects() { # label : the checker must exit 1 and name the agent file

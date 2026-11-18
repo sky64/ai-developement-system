@@ -176,22 +176,49 @@ PY
   echo "CLAUDE.md: legacy orchestrator line replaced"
   legacy_replaced=1
 fi
-if [ -f "$repo/CLAUDE.md" ] && grep -qxF -- "$old_line" "$repo/CLAUDE.md"; then
-  # Rewrite the first copy in place and drop any further copy (or every copy,
-  # when the current line is already there), so exactly one line remains.
-  python3 -I - "$repo/CLAUDE.md" "$old_line" "$line" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1]); old, new = sys.argv[2], sys.argv[3]
-lines = p.read_text().split("\n")
-out, have_new = [], new in lines
-for entry in lines:
-    if entry != old:
+# The rewrite works on bytes and touches nothing but the orchestrator lines: every
+# other line keeps its content and its own line ending (LF or CRLF, mixed files
+# included), and the rewritten line keeps the ending it had. With at least one
+# old line present, exactly one current line remains: the first current line when
+# there is one, otherwise the first old line rewritten in place. Without an old
+# line the file is not written at all.
+line_update=""
+if [ -f "$repo/CLAUDE.md" ]; then
+  line_update="$(python3 -I - "$repo/CLAUDE.md" "$old_line" "$line" <<'PY'
+import sys
+
+path, old, new = sys.argv[1], sys.argv[2].encode(), sys.argv[3].encode()
+with open(path, "rb") as fh:
+    entries = fh.read().splitlines(keepends=True)
+
+
+def content(entry: bytes) -> bytes:
+    return entry.rstrip(b"\r\n")
+
+
+if not any(content(entry) == old for entry in entries):
+    sys.exit(0)
+out, have_new = [], False
+keep_first_new = any(content(entry) == new for entry in entries)
+for entry in entries:
+    body = content(entry)
+    if body == new:
+        if not have_new:
+            out.append(entry)
+            have_new = True
+    elif body == old:
+        if not keep_first_new and not have_new:
+            out.append(new + entry[len(body):])
+            have_new = True
+    else:
         out.append(entry)
-    elif not have_new:
-        out.append(new)
-        have_new = True
-p.write_text("\n".join(out))
+with open(path, "wb") as fh:
+    fh.write(b"".join(out))
+print("updated")
 PY
+)"
+fi
+if [ "$line_update" = updated ]; then
   echo "CLAUDE.md: orchestrator line updated (main-checkout wording, decision 0009)"
 elif [ -f "$repo/CLAUDE.md" ] && grep -qF "crew64:orchestrator" "$repo/CLAUDE.md"; then
   [ "$legacy_replaced" = 1 ] || echo "CLAUDE.md: orchestrator line already present"

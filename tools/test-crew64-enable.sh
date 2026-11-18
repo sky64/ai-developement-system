@@ -230,6 +230,29 @@ R33="$TMP/r33"; newrepo "$R33"; printf '%s\nmiddle\n%s\n' "$OLD_LINE" "$OLD_LINE
 git -C "$R33" add CLAUDE.md && git -C "$R33" commit -q -m "old line twice"
 bash "$ENABLE" "$R33" >/dev/null 2>&1; rc=$?
 [ "$rc" = 0 ] && [ "$(grep -c 'crew64:orchestrator' "$R33/CLAUDE.md")" = 1 ] && grep -qF -- "$NEW_TAIL" "$R33/CLAUDE.md" && grep -qx 'middle' "$R33/CLAUDE.md" && ok "a doubled old line collapses to one new line" || bad "doubled old line: $(cat "$R33/CLAUDE.md" | cut -c1-80)"
+# (g) Codex cycle 1: only the matching line changes, byte for byte. Mixed line
+# endings elsewhere in the file are kept, and the rewritten line keeps its own.
+NEW_LINE="${OLD_LINE%The orchestrator does not write or commit.}$NEW_TAIL"
+bytes_case() { # label repo expected-file : run enable, compare CLAUDE.md with the expected bytes
+  git -C "$2" add CLAUDE.md && git -C "$2" commit -q -m fixture
+  out="$(bash "$ENABLE" "$2" 2>&1)"; rc=$?
+  [ "$rc" = 0 ] && cmp -s "$2/CLAUDE.md" "$3" && ok "$1" || bad "$1: rc=$rc got=$(od -c "$2/CLAUDE.md" | head -3 | tr -s ' ' | cut -c1-150) out=$(printf '%s' "$out" | grep CLAUDE.md)"
+}
+R34="$TMP/r34"; newrepo "$R34"; printf 'intro\r\n%s\noutro\r\n' "$OLD_LINE" > "$R34/CLAUDE.md"; printf 'intro\r\n%s\noutro\r\n' "$NEW_LINE" > "$TMP/exp34"
+bytes_case "mixed line endings: only the old line changes, CRLF neighbours keep their CRLF" "$R34" "$TMP/exp34"
+# (h) a CRLF document: the old line is found and rewritten, CRLF kept on every line
+R35="$TMP/r35"; newrepo "$R35"; printf 'intro\r\n%s\r\noutro\r\n' "$OLD_LINE" > "$R35/CLAUDE.md"; printf 'intro\r\n%s\r\noutro\r\n' "$NEW_LINE" > "$TMP/exp35"
+bytes_case "CRLF document: the old line is rewritten and stays CRLF" "$R35" "$TMP/exp35"
+case "$out" in *"CLAUDE.md: orchestrator line updated"*) ok "CRLF document: the update is reported";; *) bad "CRLF report: $out";; esac
+# (i) new, old, old, new: exactly one new line remains, where the first new line was
+R36="$TMP/r36"; newrepo "$R36"; printf '%s\na\n%s\nb\n%s\nc\n%s\n' "$NEW_LINE" "$OLD_LINE" "$OLD_LINE" "$NEW_LINE" > "$R36/CLAUDE.md"; printf '%s\na\nb\nc\n' "$NEW_LINE" > "$TMP/exp36"
+bytes_case "old and new lines mixed and doubled: one new line remains, other lines kept" "$R36" "$TMP/exp36"
+# (j) the file is only the old line, without a final newline: still no final newline
+R37="$TMP/r37"; newrepo "$R37"; printf '%s' "$OLD_LINE" > "$R37/CLAUDE.md"; printf '%s' "$NEW_LINE" > "$TMP/exp37"
+bytes_case "old line without a final newline: rewritten, still without one" "$R37" "$TMP/exp37"
+# (k) no old line: a file with the new line is never rewritten, even when doubled
+R38="$TMP/r38"; newrepo "$R38"; printf 'x\r\n%s\n%s\n' "$NEW_LINE" "$NEW_LINE" > "$R38/CLAUDE.md"; cp "$R38/CLAUDE.md" "$TMP/exp38"
+bytes_case "no old line: the file is left byte-identical" "$R38" "$TMP/exp38"
 # (f) the legacy ai-dev-system line migrates straight to the new wording
 grep -qF -- "$NEW_TAIL" "$R11/CLAUDE.md" && grep -qF -- "$NEW_TAIL" "$R13/CLAUDE.md" && ! grep -qxF -- "$OLD_LINE" "$R13/CLAUDE.md" && ok "legacy ai-dev-system lines end in the new wording" || bad "legacy to new wording: r11=$(cat "$R11/CLAUDE.md" | cut -c300-) r13=$(cat "$R13/CLAUDE.md" | cut -c300-)"
 
