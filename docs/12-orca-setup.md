@@ -6,7 +6,7 @@ Verified on this machine on 2026-10-27 from a Claude session inside an Orca term
 
 | Item | Result |
 |---|---|
-| Orca | 1.4.242 running, runtime ready, 15 repositories under `~/Projects` registered, one SSH target (`gach-staging`) registered and not connected |
+| Orca | 1.4.255 verified 2026-11-17 on the local host (1.4.242 at the 2026-10-27 setup; `tools/orca-version-check.sh` compares the running version with this row), runtime ready, 15 repositories under `~/Projects` registered, one SSH target (`gach-staging`) registered and not connected |
 | Claude Code hooks | Orca's agent hooks are in `~/.claude/settings.json` for every hook event; the hook port and token are in the Orca terminal environment |
 | Native subagents | Available inside Orca-launched Claude. An Explore subagent ran a command and returned. Cloud Room disabled these |
 | Worktree creation | `orca worktree create --repo name:<repo> --name <name> --no-parent --base-branch <ref> --setup skip --json` creates `~/orca/workspaces/<repo>/<name>` on branch `sky64/<name>` |
