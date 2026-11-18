@@ -157,8 +157,21 @@ else
 fi
 
 # 4. Commit
-files=(.claude/settings.json .claude/crew64.json CLAUDE.md)
-git -C "$repo" add "${files[@]}"
+# Repositories often gitignore .claude (public and upstream-tracking repos). An
+# ignored file is written and used, since the hook and the reader read the
+# working copy, but it cannot be committed; report it and commit the rest.
+files=(); ignored=()
+for f in .claude/settings.json .claude/crew64.json CLAUDE.md; do
+  if git -C "$repo" check-ignore -q -- "$f" 2>/dev/null && ! git -C "$repo" ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+    ignored+=("$f")
+  else
+    files+=("$f")
+  fi
+done
+[ ${#ignored[@]} -eq 0 ] || echo "git: ${ignored[*]} left untracked (matched by git's exclude rules); the harness reads the working copy"
+# -f: every file here is either not ignored or already tracked; without it git
+# refuses the whole pathspec when a tracked file sits inside an ignored directory.
+[ ${#files[@]} -eq 0 ] || git -C "$repo" add -f -- "${files[@]}"
 # The rename's deletion side belongs in the same commit, also when a previous
 # --no-commit run already staged it (the file is then gone from the tree but
 # still present in HEAD).
@@ -166,7 +179,7 @@ if [ "$legacy_was_tracked" = 1 ] || git -C "$repo" cat-file -e HEAD:.claude/ai-d
   files+=(.claude/ai-dev-system.json)
 fi
 if [ "$commit" = 1 ]; then
-  if git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
+  if [ ${#files[@]} -eq 0 ] || git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
     echo "commit: nothing to commit"
   elif ORCHESTRATOR_GUARD=off git -C "$repo" commit -q -m "chore: enable crew64 plugin" -- "${files[@]}"; then
     echo "commit: $(git -C "$repo" rev-parse --short HEAD) chore: enable crew64 plugin"
@@ -175,7 +188,11 @@ if [ "$commit" = 1 ]; then
     exit 1
   fi
 else
-  echo "commit: skipped (--no-commit); files are staged"
+  if [ ${#files[@]} -gt 0 ] && ! git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
+    echo "commit: skipped (--no-commit); files are staged"
+  else
+    echo "commit: skipped (--no-commit); nothing staged"
+  fi
 fi
 echo
 echo "The plugin applies once this folder is trusted in Claude Code. Edit .claude/crew64.json to turn features on or off (docs/05-delegation.md). Orca's per-repo setup script is a UI setting; check it before creating worktrees with setup enabled."
