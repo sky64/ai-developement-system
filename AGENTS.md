@@ -24,7 +24,7 @@ Read README.md and docs/12-orca-setup.md for the current setup state. docs/05-de
 - Before a risky agent run, record the scope, runtime, permission mode, deadline, available hard limits, and retry allowance. Normal tasks record scope, base commit, files, and acceptance criteria in the worker brief.
 - Hand review to a fresh Codex context with repository, base/head SHAs, acceptance criteria, changed files, and check results. Review the actual diff and relevant behavior.
 - Reviewer output identifies the commit, actionable findings with file/line references, verification, and limitations. It is advisory and does not replace human approval.
-- Correction/review cycles, retries of a failed operation and model-ladder escalations draw on one allowance of two per task; it is one budget, not three. Stop at the recorded deadline; if no external limit is verified, keep execution attended.
+- Correction/review cycles, retries of a failed operation and model-ladder escalations draw on one allowance of `limits.review_cycles` per task (`.claude/crew64.json`, default 2); it is one budget, not three. When it is spent the orchestrator stops and asks the owner once (orchestrator skill, Rungs and models). Stop at the recorded deadline; if no external limit is verified, keep execution attended.
 - On interruption, inspect commits, uncommitted work, pending side effects, and Orca Runs before resuming. Stop only known workers and processes.
 
 ## Verification for this repository
