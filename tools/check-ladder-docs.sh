@@ -21,13 +21,57 @@ forbid() {
     printf '%s: must not contain %s\n' "$file" "$phrase"; missing=$((missing + 1))
   fi
 }
-frontmatter() { # the leading ----fenced block of a Markdown file, fences excluded
-  awk 'NR==1 { if ($0 != "---") exit; next } $0 == "---" { exit } { print }' "$1" 2>/dev/null
-}
-fm_key() { # file key value: the frontmatter has exactly one top-level "key:" line, reading "key: value"
-  local file="$1" key="$2" value="$3"
-  if [ "$(frontmatter "$file" | grep -E -- "^${key}:")" != "${key}: ${value}" ]; then
-    printf '%s: frontmatter must carry exactly one line: %s: %s\n' "$file" "$key" "$value"
+agent_fields() { # file field... : the agent file's frontmatter is exactly these fields
+  # A field is "key=value" (the value must match exactly) or "key" (any value).
+  # The frontmatter is read as a strict subset of YAML, so that what this
+  # check sees is what any YAML parser sees: an opening "---" on line 1 and a
+  # closing "---"; inside, only plain "key: value" lines, each key once, and
+  # indented text only under a block scalar ("key: >-"). Quoted or spaced
+  # keys, comments, continuation lines, nested values and keys outside the
+  # listed set are rejected rather than interpreted.
+  local out
+  if ! out="$(python3 -I -c '
+import re, sys
+
+path, wanted = sys.argv[1], [a.partition("=") for a in sys.argv[2:]]
+
+
+def fail(msg):
+    print(f"{path}: {msg}")
+    sys.exit(1)
+
+
+try:
+    with open(path, encoding="utf-8", newline="") as fh:
+        lines = fh.read().split("\n")
+except (OSError, UnicodeDecodeError) as exc:
+    fail(f"cannot read the agent file: {exc}")
+if lines[0] != "---":
+    fail("no frontmatter block on line 1")
+if "---" not in lines[1:]:
+    fail("the frontmatter block is not closed")
+fields, in_block = {}, False
+for number, line in enumerate(lines[1:lines.index("---", 1)], start=2):
+    plain = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*): (\S.*)", line)
+    if plain:
+        key, value = plain.groups()
+        if key in fields:
+            fail(f"line {number}: frontmatter key {key} is declared twice")
+        fields[key] = value
+        in_block = re.fullmatch(r"[>|][+-]?", value) is not None
+    elif not (in_block and (line == "" or line.startswith(" "))):
+        fail(f"line {number}: frontmatter line is not a plain key: value line")
+allowed = [key for key, _, _ in wanted]
+for key in fields:
+    if key not in allowed:
+        fail(f"frontmatter key {key} is not one of: {", ".join(allowed)}")
+for key, pinned, value in wanted:
+    if key not in fields:
+        fail(f"frontmatter must carry the field {key}")
+    if pinned and fields[key] != value:
+        fail(f"frontmatter must carry exactly: {key}: {value}")
+' "$@" 2>&1)"; then
+    printf '%s\n' "$out"
     missing=$((missing + 1))
   fi
 }
@@ -153,12 +197,10 @@ need skills/plan-tooling/SKILL.md "name: plan-tooling"
 
 # Decision 0008: scout64, the read-only Haiku helper. Its tools field carries no
 # write tool, and its prompt makes "could not answer" a first-class result. The
-# name, model and tools pins read the effective frontmatter fields: matching
-# text elsewhere in the file (a comment, a quoted example) does not satisfy
-# them (tools/test-check-ladder-docs.sh).
-fm_key agents/scout64.md name scout64
-fm_key agents/scout64.md model haiku
-fm_key agents/scout64.md tools "Read, Grep, Glob, Bash"
+# frontmatter is pinned as a whole: exactly these four fields, so no other
+# field can widen what the scout may do, and matching text elsewhere in the
+# file does not satisfy the pin (tools/test-check-ladder-docs.sh).
+agent_fields agents/scout64.md name=scout64 description model=haiku "tools=Read, Grep, Glob, Bash"
 need agents/scout64.md "could not answer"
 need agents/scout64.md "never write, edit, commit"
 forbid agents/scout64.md "Write,"

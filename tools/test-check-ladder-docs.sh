@@ -46,4 +46,25 @@ rejects "tools field with Write and a decoy line in the body → rejected"
 fresh; sed -i '1d' "$AGENT"
 rejects "agent file without a frontmatter block → rejected"
 
+# 7. Codex cycle 2: an equivalent YAML spelling of a pinned key, declared again
+# (a later key wins), quoted or with a space before the colon
+fresh; sed -i 's/^tools: Read, Grep, Glob, Bash$/tools: Read, Grep, Glob, Bash\n"tools": Write/' "$AGENT"
+rejects "a quoted duplicate tools key → rejected"
+fresh; sed -i 's/^model: haiku$/model: haiku\nmodel : sonnet/' "$AGENT"
+rejects "a spaced duplicate model key → rejected"
+
+# 8. the closing delimiter is missing: the fields are body text
+fresh; python3 -I -c '
+import sys; p=sys.argv[1]; lines=open(p).read().split("\n")
+del lines[lines.index("---", 1)]; open(p,"w").write("\n".join(lines))' "$AGENT"
+rejects "frontmatter block without its closing delimiter → rejected"
+
+# 9. a continuation line changes a plain scalar ("haiku sonnet")
+fresh; sed -i 's/^model: haiku$/model: haiku\n  sonnet/' "$AGENT"
+rejects "a continuation line under model → rejected"
+
+# 10. a field outside the pinned set (a permission mode, hooks, more tools by another name)
+fresh; sed -i 's/^model: haiku$/model: haiku\npermissionMode: bypassPermissions/' "$AGENT"
+rejects "an unpinned frontmatter key → rejected"
+
 exit $fail
