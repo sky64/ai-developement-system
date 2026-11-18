@@ -184,4 +184,86 @@ out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
 out="$(run "$M" check "$EXAMPLE")"; rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] && ok "check example with scout64 → exit 0, silent" || bad "check example scout64: rc=$rc out=$out"
 
+# 23-25. the process ladder (decision 0009): process.* and features.process_ladder
+setproc() { # <json-object|absent> [process_ladder json] : write defaults with process replaced or removed
+  mkdir -p "$M/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1]))
+if sys.argv[2]=="absent": d.pop("process",None)
+else: d["process"]=json.loads(sys.argv[2])
+if len(sys.argv)>4: d["features"]["process_ladder"]=json.loads(sys.argv[4])
+json.dump(d,open(sys.argv[3],"w"))' "$DEFAULTS" "$1" "$M/.claude/crew64.json" ${2+"$2"}; }
+getproc() { (cd "$M" && python3 -I "$MOD" get "process.$1" 2>&1); }
+envproc() { (cd "$M" && CREW64_PROCESS_MODE="$1" python3 -I "$MOD" get process.default_mode 2>&1); }
+
+# 23. no process block: the defaults, status shows them after scout64, check passes
+setproc absent
+out="$(getproc default_mode)"; [ "$out" = "auto" ] && ok "get process.default_mode without process → auto" || bad "no process mode: $out"
+out="$(getproc native_max_files)"; [ "$out" = "3" ] && ok "get process.native_max_files without process → 3" || bad "no process files: $out"
+out="$(getproc native_max_tool_calls)"; [ "$out" = "40" ] && ok "get process.native_max_tool_calls without process → 40" || bad "no process calls: $out"
+out="$(run "$M" status)"; case "$out" in *"scout64=on process=auto max_files=3 max_calls=40 platform="*) ok "status shows process=auto max_files=3 max_calls=40 after scout64";; *) bad "no process status: $out";; esac
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check without process → exit 0, silent" || bad "check no process: rc=$rc out=$out"
+dropfeat process_ladder
+out="$(run "$M" get features.process_ladder)"; [ "$out" = "true" ] && ok "get features.process_ladder without the key → true" || bad "process_ladder absent get: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check without features.process_ladder → exit 0, silent" || bad "check process_ladder absent: rc=$rc out=$out"
+out="$(run "$M" check "$DEFAULTS")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check defaults with process → exit 0, silent" || bad "check defaults process: rc=$rc out=$out"
+out="$(run "$M" check "$EXAMPLE")"; rc=$?
+[ "$rc" = 0 ] && [ -z "$out" ] && ok "check example with process → exit 0, silent" || bad "check example process: rc=$rc out=$out"
+
+# 24. file values are read; CREW64_PROCESS_MODE beats the file only when it names a mode
+setproc '{"default_mode":"native","native_max_files":5,"native_max_tool_calls":10}'
+out="$(getproc default_mode)"; [ "$out" = "native" ] && ok "process.default_mode native → native" || bad "file mode: $out"
+out="$(getproc native_max_files)"; [ "$out" = "5" ] && ok "process.native_max_files 5 → 5" || bad "file files: $out"
+out="$(getproc native_max_tool_calls)"; [ "$out" = "10" ] && ok "process.native_max_tool_calls 10 → 10" || bad "file calls: $out"
+out="$(run "$M" status)"; case "$out" in *"process=native max_files=5 max_calls=10"*) ok "status shows the file's process values";; *) bad "file process status: $out";; esac
+out="$(envproc delegated)"; [ "$out" = "delegated" ] && ok "CREW64_PROCESS_MODE=delegated → delegated" || bad "env delegated: $out"
+out="$(envproc 'NATIVE ')"; [ "$out" = "native" ] && ok "CREW64_PROCESS_MODE='NATIVE ' → native (stripped, lower-cased)" || bad "env NATIVE: $out"
+out="$(cd "$M" && CREW64_PROCESS_MODE=' Auto' python3 -I "$MOD" status 2>&1)"; case "$out" in *"process=auto max_files=5"*) ok "status applies CREW64_PROCESS_MODE";; *) bad "env status: $out";; esac
+for v in bogus '' ' ' 'native,delegated' 'off'; do
+  out="$(envproc "$v")"; [ "$out" = "native" ] && ok "CREW64_PROCESS_MODE='$v' → file value native" || bad "env '$v': $out"
+done
+setproc absent
+out="$(envproc native)"; [ "$out" = "native" ] && ok "CREW64_PROCESS_MODE=native without a process block → native" || bad "env no block: $out"
+
+# 25. invalid values read as the defaults and check names the key
+setproc '{"default_mode":"sometimes","native_max_files":3,"native_max_tool_calls":40}'
+out="$(getproc default_mode)"; [ "$out" = "auto" ] && ok 'process.default_mode "sometimes" → default auto' || bad "bad mode: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"process.default_mode"*) true;; *) false;; esac && ok "check bad mode → exit 1 names process.default_mode" || bad "check bad mode: rc=$rc out=$out"
+for v in 0 true -2 2.0 '"3"' null; do
+  setproc "{\"default_mode\":\"auto\",\"native_max_files\":$v,\"native_max_tool_calls\":40}"
+  out="$(getproc native_max_files)"; [ "$out" = "3" ] && ok "process.native_max_files $v → default 3" || bad "bad files $v: $out"
+  out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+  [ "$rc" = 1 ] && case "$out" in *"process.native_max_files"*) true;; *) false;; esac && ok "check native_max_files $v → exit 1 names the key" || bad "check files $v: rc=$rc out=$out"
+done
+setproc '{"default_mode":"auto","native_max_files":3,"native_max_tool_calls":0}'
+out="$(getproc native_max_tool_calls)"; [ "$out" = "40" ] && ok "process.native_max_tool_calls 0 → default 40" || bad "bad calls: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"process.native_max_tool_calls"*) true;; *) false;; esac && ok "check native_max_tool_calls 0 → exit 1 names the key" || bad "check calls: rc=$rc out=$out"
+for v in '[]' '"native"' 'null' '7'; do
+  setproc "$v"
+  out="$(getproc default_mode)$(getproc native_max_files)$(getproc native_max_tool_calls)"; [ "$out" = "auto340" ] && ok "process $v (not an object) → the defaults" || bad "non-object $v: $out"
+  out="$(run "$M" status)"; case "$out" in *"process=auto max_files=3 max_calls=40"*) ok "status with process $v shows the defaults";; *) bad "non-object status $v: $out";; esac
+  out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+  [ "$rc" = 1 ] && case "$out" in *"process must be an object"*) true;; *) false;; esac && ok "check process $v → exit 1 process must be an object" || bad "check non-object $v: rc=$rc out=$out"
+done
+setproc '{}'
+out="$(getproc default_mode)$(getproc native_max_files)"; [ "$out" = "auto3" ] && ok "empty process block → the defaults" || bad "empty process: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"process.default_mode"*"process.native_max_files"*"process.native_max_tool_calls"*) true;; *) false;; esac && ok "check empty process → exit 1 names all three keys" || bad "check empty process: rc=$rc out=$out"
+# the switch off: status says so, the configured mode is still readable
+setproc '{"default_mode":"native","native_max_files":5,"native_max_tool_calls":10}' false
+out="$(run "$M" status)"; case "$out" in *"scout64=on process=off platform="*) ok "features.process_ladder false → status shows process=off";; *) bad "ladder off status: $out";; esac
+out="$(getproc default_mode)"; [ "$out" = "native" ] && ok "get process.default_mode with the switch off → the configured mode" || bad "ladder off get: $out"
+out="$(cd "$M" && CREW64_FEATURE_PROCESS_LADDER=on python3 -I "$MOD" status 2>&1)"; case "$out" in *"process=native max_files=5 max_calls=10"*) ok "CREW64_FEATURE_PROCESS_LADDER=on beats a file false";; *) bad "ladder env on: $out";; esac
+out="$(getproc bogus)"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"unknown process key"*) true;; *) false;; esac && ok "get process.bogus → exit 1 unknown process key" || bad "bogus process key: rc=$rc out=$out"
+# an untrusted root's process block is not applied
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["process"]={"default_mode":"native","native_max_files":9,"native_max_tool_calls":9}; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/crew64.json"
+out="$(run "$M3" status)"
+case "$out" in *"config=untrusted:"*"process=auto max_files=3 max_calls=40"*) ok "untrusted root keeps the default process values";; *) bad "untrusted process: $out";; esac
+
 exit $fail

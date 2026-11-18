@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code PreToolUse hook: the orchestrator does not write.
+"""Claude Code PreToolUse hook: the orchestrator does not write in the main checkout.
 
 Policy (docs/05-delegation.md): a Claude session running in the project's
 main checkout is the orchestrator. It reads, runs checks, selects
@@ -467,7 +467,9 @@ def deny(reason: str) -> int:
         f"orchestrator-guard: denied ({reason}). The orchestrator does not "
         "write or commit. Delegate the change to an implementer in an Orca "
         "worktree (orca worktree create --agent ...), and keep implementer "
-        "writes inside that worktree (see docs/05-delegation.md).\n"
+        "writes inside that worktree (see docs/05-delegation.md). For a native "
+        "task, move into its task worktree first (orchestrator skill, "
+        "Process ladder).\n"
     )
     return 2
 

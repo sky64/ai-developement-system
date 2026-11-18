@@ -5,7 +5,8 @@ Importable by the guard hook, callable as a CLI by the bot scripts and the
 orchestrator. Standard library only.
 
     python3 -I tools/crew64_config.py get <dotted.key>   value, or exit 1
-                                       (features.<name> and limits.<name> apply the fallbacks)
+                                       (features.<name>, limits.<name> and process.<name>
+                                       apply the fallbacks)
     python3 -I tools/crew64_config.py status              one status line
     python3 -I tools/crew64_config.py check <path>        validate, exit 1 + reasons
 
@@ -22,6 +23,11 @@ Rules:
   CREW64_LIMIT_<NAME>=<n> beats the file when it parses as such; any other
   value, in the environment or the file (booleans included), falls through
   to the next source and finally to the shipped default.
+- Process ladder (decision 0009): process.default_mode is one of auto,
+  native, delegated; CREW64_PROCESS_MODE beats the file when, stripped and
+  lower-cased, it names a mode. process.native_max_files and
+  process.native_max_tool_calls are integers of at least 1, with no
+  environment override. Invalid values read as the shipped defaults.
 """
 import json
 import os
@@ -30,14 +36,19 @@ import sys
 
 CONFIG_REL = os.path.join(".claude", "crew64.json")
 VERSION = 1
-BOOL_FEATURES = ("orchestrator_guard", "model_ladder", "bot_identity", "build_map", "scout64")
+BOOL_FEATURES = (
+    "orchestrator_guard", "model_ladder", "bot_identity", "build_map", "scout64", "process_ladder",
+)
 # Switches added after the first release: a config without the key validates
 # and reads as the shipped default, so repos enabled earlier keep working.
-OPTIONAL_FEATURES = ("scout64",)
+OPTIONAL_FEATURES = ("scout64", "process_ladder")
 METERING_KINDS = ("none", "solvela", "openai-compatible")
 ENV_PREFIX = "CREW64_FEATURE_"
 LIMITS = ("review_cycles",)
 LIMIT_ENV_PREFIX = "CREW64_LIMIT_"
+PROCESS_MODES = ("auto", "native", "delegated")
+PROCESS_LIMITS = ("native_max_files", "native_max_tool_calls")
+PROCESS_ENV = "CREW64_PROCESS_MODE"
 
 
 def _defaults_path() -> str:
@@ -224,6 +235,44 @@ def limit(cfg, name: str, env=None) -> int:
     return defaults()["limits"][name]
 
 
+def _process_section(cfg) -> dict:
+    """The config's process object, or an empty dict when absent or not an object."""
+    section = cfg.get("process") if isinstance(cfg, dict) else None
+    return section if isinstance(section, dict) else {}
+
+
+def process_mode(cfg, env=None) -> str:
+    """Process mode: env override, then the file, then the shipped default.
+    Every source must name one of PROCESS_MODES or it is skipped."""
+    env = os.environ if env is None else env
+    raw = env.get(PROCESS_ENV)
+    if raw is not None and raw.strip().lower() in PROCESS_MODES:
+        return raw.strip().lower()
+    from_file = _process_section(cfg).get("default_mode")
+    if isinstance(from_file, str) and from_file in PROCESS_MODES:
+        return from_file
+    return defaults()["process"]["default_mode"]
+
+
+def process_limit(cfg, name: str) -> int:
+    """Native-mode threshold: the file value when it is an integer of at
+    least 1, else the shipped default. No environment override."""
+    from_file = _positive_int(_process_section(cfg).get(name))
+    if from_file is not None:
+        return from_file
+    return defaults()["process"][name]
+
+
+def _process_status(cfg) -> str:
+    if feature(cfg, "process_ladder") is not True:
+        return "process=off"
+    return (
+        f"process={process_mode(cfg)}"
+        f" max_files={process_limit(cfg, 'native_max_files')}"
+        f" max_calls={process_limit(cfg, 'native_max_tool_calls')}"
+    )
+
+
 def deviations(cfg: dict, base: dict):
     """Dotted keys under models whose value differs from base."""
     out = []
@@ -268,6 +317,7 @@ def status_line(cfg, cwd: str) -> str:
         f" build_map={_onoff(feature(cfg, 'build_map'))}"
         f" review_cycles={limit(cfg, 'review_cycles')}"
         f" scout64={_onoff(feature(cfg, 'scout64'))}"
+        f" {_process_status(cfg)}"
         f" platform={platform.get('kind', 'orca')}"
         f" hosts={','.join(sorted(hosts)) if hosts else 'none'}"
         f" gateway={gateway.get('kind', 'none')}"
@@ -301,6 +351,17 @@ def check(data) -> list:
             for name in LIMITS:
                 if _positive_int(limits.get(name)) is None:
                     problems.append(f"limits.{name} must be an integer of at least 1")
+    if "process" in data:
+        process = data.get("process")
+        if not isinstance(process, dict):
+            problems.append("process must be an object")
+        else:
+            mode = process.get("default_mode")
+            if not isinstance(mode, str) or mode not in PROCESS_MODES:
+                problems.append(f"process.default_mode must be one of {', '.join(PROCESS_MODES)}")
+            for name in PROCESS_LIMITS:
+                if _positive_int(process.get(name)) is None:
+                    problems.append(f"process.{name} must be an integer of at least 1")
     platform = data.get("platform")
     if not isinstance(platform, dict) or not isinstance(platform.get("kind"), str):
         problems.append("platform.kind must be a string")
@@ -373,6 +434,16 @@ def cli(argv) -> int:
                 sys.stderr.write(f"crew64_config: unknown limit {key}\n")
                 return 1
             _print_value(limit(cfg, name))
+            return 0
+        if key.startswith("process."):
+            name = key[len("process."):]
+            if name == "default_mode":
+                _print_value(process_mode(cfg))
+            elif name in PROCESS_LIMITS:
+                _print_value(process_limit(cfg, name))
+            else:
+                sys.stderr.write(f"crew64_config: unknown process key {key}\n")
+                return 1
             return 0
         try:
             _print_value(_get(cfg if cfg is not None else defaults(), key))

@@ -1,4 +1,4 @@
-# Delegation policy: the orchestrator does not code
+# Delegation policy: the orchestrator does not write in the main checkout
 
 Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist implementer existed, but a lead thread given money-path work never invoked it and edited the files itself. Nothing enforced the selection. This policy adds enforcement and a required selection step.
 
@@ -6,13 +6,13 @@ Adopted 2026-10-20 after reviewing the solvela harness. There, a specialist impl
 
 | Role | Runs as | May write? |
 |---|---|---|
-| Orchestrator | Claude thread in the project checkout | No, with one exception. Reads, runs checks, selects specialists, starts workers, routes review, reports. It may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`; see Task tiers. |
+| Orchestrator | Claude thread in the project checkout | Not in the main checkout, with one exception. Reads, runs checks, selects specialists, starts workers, routes review, reports. In native mode it does a small task itself in a task worktree; see Process ladder. In the main checkout it may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`; see Task tiers. |
 | Specialist implementer | Claude or Codex Orca worker in its own Orca worktree, acting as one named agent | Yes, its assigned files only. One writer per file set. |
 | Specialist implementer, isolated | An Orca worker in a per-workspace environment recipe (container, VM, or SSH host) | Yes, its assigned files only. The recipe, not the hook, would be the boundary. Untested; see [decision 0003](decisions/0003-orca.md). |
 | Independent reviewer | Codex worker in its own worktree | No. Reviews the diff between base and head. |
-| Read-only investigation | The orchestrator itself, with native subagents for reading only; they work inside Orca-launched Claude (verified 2026-10-27, [12-orca-setup.md](12-orca-setup.md)). Agent definitions are used as role prompts for Orca workers. | No. The orchestrator reads and runs checks; anything that writes runs as a worker, apart from the trivial direct-edit exception in Task tiers. |
+| Read-only investigation | The orchestrator itself, with native subagents for reading only; they work inside Orca-launched Claude (verified 2026-10-27, [12-orca-setup.md](12-orca-setup.md)). Agent definitions are used as role prompts for Orca workers. | No. Subagents never write. What writes is a worker, or the orchestrator in a task worktree in native mode (Process ladder), apart from the trivial direct-edit exception in Task tiers. |
 
-Any agent that writes runs as an Orca worker so Orca can see, stop, and inspect it, except the orchestrator on a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
+Any agent that writes runs as an Orca worker so Orca can see, stop, and inspect it, with two exceptions: the orchestrator in native mode, in a task worktree Orca lists (Process ladder), and the orchestrator on a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
 
 ## Task tiers
 
@@ -23,10 +23,10 @@ Risk decides the tier, not size or file type. Any change to delegation policy, A
 | Tier | Examples | Implementer | Reviewer | Record |
 |---|---|---|---|---|
 | Trivial | Docs, config, a single file, no new logic | One worker, generalist allowed | None | The commit message |
-| Normal | Features, bug fixes, tests, hook or script changes | One specialist worker | One Codex worker | Scope, base commit, files, acceptance criteria in the worker brief |
+| Normal | Features, bug fixes, tests, hook or script changes | One specialist worker | One Codex worker (none for a docs-only native diff; see Process ladder) | Scope, base commit, files, acceptance criteria in the worker brief |
 | Risky | Money path, auth, credentials, CI or deploy, AGENTS.md policy, anything that merges or runs unattended | One specialist worker, attended | One Codex worker, up to `limits.review_cycles` correction cycles (default 2) | Full record: the above plus permission mode, deadline, hard limits, retry allowance |
 
-The orchestrator may edit directly only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`. Otherwise it delegates at every tier.
+The orchestrator may edit directly in the main checkout only for a trivial task when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`. Otherwise it never writes there: it delegates, or works natively in a task worktree where the Process ladder allows. In native mode the orchestrator is the implementer in the table above.
 
 ## Model ladder
 
@@ -69,13 +69,29 @@ Tooling is rung-invariant. The Tooling table from the `plan-tooling` skill is fi
 
 The ladder table changes only through a new decision record that cites spend and outcome numbers from at least one review period (see Ladder review below). It never changes inside a task or a plan.
 
+## Process ladder
+
+Adopted 2026-11-18, see [decision 0009](decisions/0009-process-ladder.md). The tier decides whether a reviewer is required; the mode decides where the work runs. Every task carries a mode, native or delegated, decided from facts that can be checked before the work starts. Nothing in this section estimates effort or duration.
+
+| Mode | Who works | Where | Review | When |
+|---|---|---|---|---|
+| native | the orchestrator session itself | a task worktree it creates and moves into | trivial tier: none; normal tier: one Codex review of the diff when any code changed (docs-only diffs skip it); risky: never native | all of: one task; at most `process.native_max_files` files (default 3); one logical change; no new dependency; tier trivial or normal |
+| delegated | one Orca worker per task, plus the reviewer | the worker's worktree | by tier, as before | any of: risky tier; more than one task; tasks that could run in parallel; work that must run unattended or past a session; the owner says so |
+
+- `process.default_mode` in `.claude/crew64.json` is `auto` (the table decides), `native` (the table still forbids native for risky or multi-task work) or `delegated` (every task is delegated). `CREW64_PROCESS_MODE` overrides it for one session. Risky tier is never native, whatever the setting says. With `features.process_ladder` off every task is delegated, as before decision 0009.
+- Native work is still a branch and a pull request. The orchestrator creates a task worktree, moves into it, writes the tests first, implements, runs the repository's verification list, commits, pushes and opens the pull request where `features.bot_identity` allows, has the diff reviewed as the tier requires, and returns to the main checkout. It never writes in the main checkout. A docs-only native diff at normal tier skips the Codex review; any code change gets it.
+- Escalation: a native task that touches more than `process.native_max_files` files (created, modified or deleted; the distinct file paths in `git status --porcelain --untracked-files=all` and the committed diff against the base together) or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress on the task branch, and is handed to a worker with a brief that names the files touched and what remains. The mode never goes back to native for that task, and the escalation draws on the `limits.review_cycles` allowance. The tool-call count is the orchestrator's own, kept in the task record; nothing executable enforces it.
+- A native task keeps its rung: the plan row's for a planned task, the tier's otherwise. The model that does the work is the orchestrator session's, and the completion report names it.
+- The Orca workspace comment is set at task start to `<task>: mode=native tier=<tier> rung=<rung>` and updated at completion. The completion report is the same as for delegated work plus `Mode: native`.
+- The thresholds change only through a new decision record that cites the process numbers from at least one review period (Ladder review below).
+
 ## Plans and owner items
 
 Adopted 2026-11-17 by owner decision, see [decision 0004](decisions/0004-model-ladder.md).
 
-- A plan is written for a piece of work: a feature, a project phase, anything with more than one task. The orchestrator does not write, so a rung-2 Claude worker writes the plan file from [docs/templates/plan.md](templates/plan.md), running the `plan-tooling` skill for the Tooling table.
-- The owner approves the plan once, together with its owner-items list. The tasks inside it then dispatch without further approval. A single task outside any plan needs no plan; its brief carries tier and rung, and the rung defaults to the tier.
-- Every task row in a plan carries: risk tier, complexity rung, the model that follows from them, the tool ids from the Tooling table, acceptance criteria, and the owner item it depends on, if any.
+- A plan is written for a piece of work: a feature, a project phase, anything with more than one task. Writing the plan is delegated: a rung-2 Claude worker writes the plan file from [docs/templates/plan.md](templates/plan.md), running the `plan-tooling` skill for the Tooling table.
+- The owner approves the plan once, together with its owner-items list. The tasks inside it then dispatch without further approval. A single task outside any plan needs no plan; its brief carries tier and rung, the rung defaults to the tier, and its mode comes from the Process ladder table.
+- Every task row in a plan carries: risk tier, complexity rung, the mode (native or delegated), the model that follows from tier and rung, the tool ids from the Tooling table, acceptance criteria, and the owner item it depends on, if any.
 - Every plan has an **Owner items** section: everything the owner must supply (credentials by name, accounts, decisions, content, approvals), each tied to the task it blocks. The orchestrator asks for these at plan approval, not when a worker is already waiting.
 
 ## Enforcement
@@ -100,11 +116,11 @@ Required for normal and risky tasks. Trivial tasks may skip it and use a general
 4. Skills the implementer must load, by name. If a needed skill does not exist, author it first through a separate worker task and review it. Never leave a TODO skill that an agent is told to invoke.
 5. If no implementer fits: start a worker to author a new project agent from the template below, review it with Codex, commit it, then run the task.
 
-Generalists are allowed only for simple tasks: documentation, configuration, or a single-file change with no new logic. Even then the orchestrator delegates and does not write, unless the task is trivial, the owner says so in that turn, and the session runs with `ORCHESTRATOR_GUARD=off`.
+Generalists are allowed only for simple tasks: documentation, configuration, or a single-file change with no new logic. Even then the orchestrator does not write in the main checkout, unless the task is trivial, the owner says so in that turn, and the session runs with `ORCHESTRATOR_GUARD=off`; it delegates, or works natively in a task worktree where the Process ladder allows.
 
 ## Task record
 
-The record depends on the tier. Trivial: the commit message. Normal: scope, base commit, assigned files, acceptance criteria, the selection above, the implementer's commit, the reviewer's findings, and the owner notification. The owner is notified of every merge and deployment rather than deciding each one; see [AGENTS.md](../AGENTS.md). Risky: all of that plus permission mode, deadline, hard limits, and retry allowance. The orchestrator asks an implementer to write any record beyond the worker brief; it does not write it itself.
+The record depends on the tier. Trivial: the commit message. Normal: scope, base commit, assigned files, acceptance criteria, the selection above, the implementer's commit, the reviewer's findings, the owner notification, and the mode (native or delegated). The owner is notified of every merge and deployment rather than deciding each one; see [AGENTS.md](../AGENTS.md). Risky: all of that plus permission mode, deadline, hard limits, and retry allowance. The orchestrator asks an implementer to write any record beyond the worker brief; it does not write it itself, except in native mode, where it is the implementer and writes the record in the pull request.
 
 ## Specialist agent template
 
@@ -158,6 +174,7 @@ The configured gateway (`gateway.kind` in `.claude/crew64.json`, with `features.
 - Which sessions route through the configured gateway: pay-per-token workers, which today means DeepSeek workers (already there on the owner's host), Codex workers via a `model_providers` base URL, and any Claude worker that is API-billed rather than on a subscription. Claude Code sessions on a subscription, which today means the orchestrator and Claude workers, stay direct until the owner decides otherwise; converting them would turn subscription usage into metered spend.
 - Attribution, Solvela: every worker launched through the gateway sends `x-solvela-session` set to its Orca dispatch or task id, and its brief names the rung. The gateway's `spend_logs` then hold model, provider, tokens and cost per task with no bookkeeping by any agent. Until docs/12 records a verified way to carry that header at launch, attribution is by role through the team API key (`gateway.team_key_env` names the variables), and per-task numbers come from the worker's report.
 - Ceilings: one gateway team or key per role (implementer, reviewer, research) with hourly and daily budgets. A budget hit is a HALT for the worker and an escalation to the owner, never a retry into the same ceiling.
+- Process numbers: tasks by mode, tokens and wall time per task, reviewer findings per mode, escalations from native to delegated. They come from the completion reports (`Mode:` line) and the pull request bodies; the Orca workspace comment carries the mode while a task runs.
 - Direct sessions: the brief tells the implementer to write `Rung: <n>; Model: <id>; Tokens: <in>/<out>` as a trailer on the commit message for trivial tasks, and in the PR body for normal and risky tasks. Orca workspace comments are not a ledger; they are overwritten.
 
 The review runs after the first ten normal-tier tasks under the ladder, then monthly. One rung-1 worker is briefed to read, for the period: the gateway's per-team stats (on Solvela, `by_model` for each role team, which gives spend per role and rung because the ladder maps rung to model within a role), the PR bodies and `Rung:` trailers of direct sessions, and the orchestrator's completion reports for escalation counts. It produces spend per role and rung, escalation rate per rung, and cache hit rate, and ends with either "no change" or a draft decision record proposing a ladder change. Only an accepted decision record changes the table.

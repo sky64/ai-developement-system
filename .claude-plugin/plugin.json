@@ -1,9 +1,9 @@
 {
   "name": "crew64",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Orchestrator-does-not-write development system: write guard hook, orchestrator skill, and role templates for Orca projects",
   "author": {
-    "name": "Kenneth Dixon"
+    "name": "sky64"
   },
   "repository": "https://github.com/sky64/crew64"
 }
