@@ -22,15 +22,17 @@ forbid() {
   fi
 }
 agent_fields() { # file field... : the agent file's frontmatter is exactly these fields
-  # A field is "key=value" (the value must match exactly) or "key" (any value).
-  # The frontmatter is read as a strict subset of YAML, so that what this
-  # check sees is what any YAML parser sees: an opening "---" on line 1 and a
-  # closing "---"; inside, only plain "key: value" lines, each key once, and
-  # indented text only under a block scalar ("key: >-"). Quoted or spaced
-  # keys, comments, continuation lines, nested values, keys outside the
-  # listed set and any byte that is not printable ASCII (a carriage return or
-  # a Unicode line break is a line break to YAML and not to this check) are
-  # rejected rather than interpreted.
+  # A field is "key=value" (the line must read exactly "key: value") or "key"
+  # (free text, which must be a folded block: "key: >-", then one or more
+  # lines indented by exactly two spaces). The frontmatter is held to one
+  # canonical form, so that what this check sees is what any YAML parser sees
+  # and nothing in it can be malformed YAML (Claude Code drops every field of
+  # an agent whose frontmatter does not parse, the model and tools limits
+  # included): "---" on line 1 and a closing "---"; inside, only those lines,
+  # each key once, no key outside the listed set, printable ASCII only.
+  # Anything else is rejected rather than interpreted: quoted or spaced keys,
+  # comments, inline free text, continuation lines, nested values, blank or
+  # uneven block lines, carriage returns and Unicode line breaks.
   local out
   if ! out="$(python3 -I -c '
 import re, sys
@@ -56,7 +58,7 @@ block = raw[1:raw.index(b"---", 1)]
 for number, line in enumerate(block, start=2):
     if any(byte < 0x20 or byte > 0x7E for byte in line):
         fail(f"line {number}: only printable ASCII is accepted in the frontmatter")
-fields, in_block = {}, False
+fields, folded_lines, folded = {}, {}, None
 for number, line in enumerate((line.decode("ascii") for line in block), start=2):
     plain = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*): (\S.*)", line)
     if plain:
@@ -64,9 +66,13 @@ for number, line in enumerate((line.decode("ascii") for line in block), start=2)
         if key in fields:
             fail(f"line {number}: frontmatter key {key} is declared twice")
         fields[key] = value
-        in_block = re.fullmatch(r"[>|][+-]?", value) is not None
-    elif not (in_block and (line == "" or line.startswith(" "))):
-        fail(f"line {number}: frontmatter line is not a plain key: value line")
+        folded = key if value == ">-" else None
+        if folded:
+            folded_lines[key] = 0
+    elif folded and re.fullmatch(r"  \S.*", line):
+        folded_lines[folded] += 1
+    else:
+        fail(f"line {number}: not a plain key: value line, nor a two-space line of a folded block")
 allowed = [key for key, _, _ in wanted]
 for key in fields:
     if key not in allowed:
@@ -76,6 +82,8 @@ for key, pinned, value in wanted:
         fail(f"frontmatter must carry the field {key}")
     if pinned and fields[key] != value:
         fail(f"frontmatter must carry exactly: {key}: {value}")
+    if not pinned and not folded_lines.get(key):
+        fail(f"frontmatter field {key} must be a folded block: a >- line, then lines indented by two spaces")
 ' "$@" 2>&1)"; then
     printf '%s\n' "$out"
     missing=$((missing + 1))

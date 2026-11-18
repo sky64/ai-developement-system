@@ -79,4 +79,29 @@ open(p, "wb").write(front + sep + body)' "$AGENT" "$brk"
   rejects "a field hidden behind the line break $brk → rejected"
 done
 
+# 12. Codex cycle 4: a description that is not valid YAML makes Claude Code drop
+# every frontmatter field (the agent then loads without its model and tools
+# limits), so the description is pinned to one canonical form: a folded block
+# (">-") of lines indented by exactly two spaces.
+setdesc() { # <replacement for the description field, printf-style escapes>
+  fresh; python3 -I -c '
+import re, sys
+p = sys.argv[1]; new = sys.argv[2].encode().decode("unicode_escape")
+text = open(p).read()
+out, n = re.subn(r"(?m)^description: >-\n(?:  .*\n)+", lambda m: new, text, count=1)
+assert n == 1, "fixture: description block not found"
+open(p, "w").write(out)' "$AGENT" "$1"
+}
+setdesc 'description: "\n';              rejects "description with an unmatched double quote → rejected"
+setdesc "description: '\\n";             rejects "description with an unmatched single quote → rejected"
+setdesc 'description: ? value\n';        rejects "description with a dangling explicit key → rejected"
+setdesc 'description: "\\\\q"\n';        rejects "description with an invalid quoted escape → rejected"
+setdesc 'description: safe\n';           rejects "an inline description (not the folded block form) → rejected"
+setdesc 'description: >-\n  text\n model: sonnet\n'; rejects "a block line that dedents to one space → rejected"
+setdesc 'description: >-\n  text\n\n  more\n';      rejects "a blank line inside the description block → rejected"
+setdesc 'description: >-\n  text\n    deeper\n';    rejects "a deeper-indented description line → rejected"
+setdesc 'description: >-\n';             rejects "an empty description block → rejected"
+setdesc 'description: >-\n  Use it. "Quotes", colons: and # marks are plain text here.\n'; check
+[ "$rc" = 0 ] && ok "a canonical description with quotes, colons and hashes → accepted" || bad "canonical description: rc=$rc out=$out"
+
 exit $fail
