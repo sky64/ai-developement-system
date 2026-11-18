@@ -159,7 +159,7 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.7.0"'
+need .claude-plugin/plugin.json '"version": "0.8.0"'
 # Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
 need skills/orchestrator/SKILL.md "--spec-file"
 need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
@@ -229,6 +229,34 @@ need README.md "features.scout64"
 need config/crew64.defaults.json '"scout64": true'
 forbid skills/orchestrator/SKILL.md "Native read-only subagents run on the rung 1 model from the table"
 forbid docs/05-delegation.md "read-only native subagents run at rung 1 by default, and at rung 2 only"
+
+# Decision 0009: the process ladder. Mode (native or delegated) is decided by
+# checkable facts; risk still decides review; native never touches the main checkout.
+need skills/orchestrator/SKILL.md "## Process ladder"
+need skills/orchestrator/SKILL.md "Risky tier is never native, whatever \`process.default_mode\` says."
+need skills/orchestrator/SKILL.md "stops, commits its work in progress, and hands the worktree to a worker; the mode never goes back to native."
+need skills/orchestrator/SKILL.md "mode=native tier=<tier> rung=<rung>"
+need skills/orchestrator/SKILL.md "Docs-only diffs skip Codex at normal tier; any code change gets it."
+need skills/orchestrator/SKILL.md "With \`features.process_ladder\` off every task is delegated."
+need skills/orchestrator/SKILL.md "return to the main checkout"
+need skills/orchestrator/SKILL.md "you do not commit in the main checkout; in native mode you work in a task worktree"
+need skills/orchestrator/SKILL.md "CREW64_PROCESS_MODE"
+need docs/05-delegation.md "## Process ladder"
+need docs/05-delegation.md "Risky tier is never native"
+need docs/05-delegation.md "never goes back to native"
+need docs/05-delegation.md "Process numbers"
+need docs/05-delegation.md "and the mode (native or delegated)"
+need AGENTS.md "in the main checkout; in native mode"
+need docs/templates/plan.md "| Mode |"
+need docs/templates/plan.md "native / delegated (risky is always delegated)"
+need README.md "features.process_ladder"
+need config/crew64.defaults.json '"native_max_files": 3'
+need config/crew64.defaults.json '"native_max_tool_calls": 40'
+need tools/hooks/orchestrator-guard.py "Process ladder"
+forbid skills/orchestrator/SKILL.md "You do not write files and you do not commit."
+forbid skills/orchestrator/SKILL.md "Anything that writes runs as an Orca worker."
+forbid AGENTS.md "does not write code or commit, apart"
+forbid docs/05-delegation.md "Otherwise it delegates at every tier."
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.

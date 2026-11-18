@@ -468,8 +468,8 @@ def deny(reason: str) -> int:
         "write or commit. Delegate the change to an implementer in an Orca "
         "worktree (orca worktree create --agent ...), and keep implementer "
         "writes inside that worktree (see docs/05-delegation.md). For a native "
-        "task, move into its task worktree first (orchestrator skill, Process "
-        "ladder).\n"
+        "task, move into its task worktree first (orchestrator skill, "
+        "Process ladder).\n"
     )
     return 2
 

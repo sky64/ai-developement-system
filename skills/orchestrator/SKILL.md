@@ -4,7 +4,7 @@ description: Makes this session the orchestrator under the crew64 rules. Use at 
 
 If your prompt explicitly assigns you a worker role (implementer or reviewer), that role takes precedence: stop here, do not act as the orchestrator, and follow the role and file limits in your prompt.
 
-You are now the orchestrator. You read, run checks, select specialists, start Orca workers, route review, and report. You do not write files and you do not commit.
+You are now the orchestrator. You read, run checks, select specialists, start Orca workers, route review, and report. You do not write files and you do not commit in the main checkout; in native mode you work in a task worktree (Process ladder below).
 
 ## Operating rules
 
@@ -26,12 +26,13 @@ Then load the version-matched Orca guides: `orca skills get orca-cli` for handof
 Decision 0005: every feature has a switch in the repository's `.claude/crew64.json`, read from the main checkout (a worktree's copy governs nothing until merged). The file is risky tier to change.
 
 - First command of the session: `python3 -I "${CLAUDE_PLUGIN_ROOT}/tools/crew64_config.py" status`. Paste its one line as the first line of your first message. It names the config path, every switch, the platform and its hosts, the gateway kind, and whether `models` deviates from `config/crew64.defaults.json`. Report every deviation; do not silently use it. Second command: `bash "${CLAUDE_PLUGIN_ROOT}/tools/orca-version-check.sh"`; paste its line after the status line. `drift=yes` means this host runs an Orca version docs/12 has not verified: say so and carry on.
-- Switches: `orchestrator_guard`, `model_ladder`, `bot_identity`, `metering` (`none`, `solvela`, `openai-compatible`), `build_map` (reserved), `scout64` (read-only lookups go to the Haiku helper; optional in the file, on when absent). Environment overrides `CREW64_FEATURE_<NAME>=on|off` beat the file; `ORCHESTRATOR_GUARD=off` is the alias for the guard switch. Read a switch with `crew64_config.py get features.<name>`.
+- Switches: `orchestrator_guard`, `model_ladder`, `bot_identity`, `metering` (`none`, `solvela`, `openai-compatible`), `build_map` (reserved), `scout64` (read-only lookups go to the Haiku helper; optional in the file, on when absent), `process_ladder` (small, bounded tasks run native; optional in the file, on when absent). Environment overrides `CREW64_FEATURE_<NAME>=on|off` beat the file; `ORCHESTRATOR_GUARD=off` is the alias for the guard switch. Read a switch with `crew64_config.py get features.<name>`.
 - Limits: `limits.review_cycles` (default 2) is the per-task allowance shared by correction cycles, retries and escalations. `CREW64_LIMIT_REVIEW_CYCLES=<n>` beats the file for one session. The status line shows the effective value as `review_cycles=<n>`.
+- Process: `process.default_mode` (`auto`, `native`, `delegated`), `process.native_max_files` (default 3) and `process.native_max_tool_calls` (default 40) set the process ladder below. `CREW64_PROCESS_MODE=<mode>` beats the file for one session. The status line shows `process=<mode> max_files=<n> max_calls=<n>`, or `process=off` when the switch is off.
 - When model_ladder is off: briefs carry no `Rung:` or `Model:` lines, dispatch commands pass no `--model` or `--effort`, read-only subagents inherit the session model (the scout is its own switch: with `features.scout64` on, lookups still go to `crew64:scout64`, and the re-ask after `could not answer` inherits the session model), and the completion report omits rung and escalation fields. Escalation still applies by tier: the `limits.review_cycles` allowance predates the ladder.
 - When metering is none: skip the attribution bullets in Rungs and models and send no gateway header. When it is `solvela` or `openai-compatible`, `gateway.kind`, `gateway.base_url` and `gateway.team_key_env` say where calls go and which environment variables hold the team keys; name them in briefs, never their values.
 - When bot_identity is off: never push or merge. Report that a human must, and leave the branch in its worktree.
-- With no config file, every switch is at its default (guard on, ladder on, bot off, metering none, scout64 on) and the status line says `config=none`.
+- With no config file, every switch is at its default (guard on, ladder on, bot off, metering none, scout64 on, process ladder on in `auto`) and the status line says `config=none`.
 
 ## Platform seam
 
@@ -52,12 +53,40 @@ Another platform is another table in this section, selected by `platform.kind`; 
 - Trivial tier, unsupervised handoff (rung 0): `orca worktree create --name <task> --agent claude --model claude-haiku-5-5 --prompt "<brief>" --json`.
 - Normal and risky tiers, supervised: `orca orchestration run-create`, then `orca worktree create --name <task> --parent-worktree active --setup skip --json`, then `orca orchestration worker-start --spec-file <path> --worktree id:<id from create> --agent claude --model claude-sonnet-5-5 --json` for a rung-1 implementer or `--agent codex --model gpt-6.1-sol --effort medium --json` for a rung-1 reviewer, then `orca orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json`. After the result, `worker-release --dispatch <id>` and `check --ack <delivery id>`. Orca 1.4.242 rejects `--worktree new-child` on worker-start; create the worktree first. Write the brief to the session scratchpad under `/tmp` first; the guard allows Write and Edit there from any checkout (field fixes 2026-11-18). `--spec "<text>"` remains for one-line briefs.
 - A worker does not necessarily see the plugin files at `${CLAUDE_PLUGIN_ROOT}`. Paste the role prompt text into the brief instead of pointing at the path.
-- Native subagents are allowed for read-only investigation only. Anything that writes runs as an Orca worker.
-- The orchestrator does not write or commit. The direct-edit exception in the plugin AGENTS.md applies only when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
+- Native subagents are allowed for read-only investigation only. A subagent never writes: what writes is an Orca worker, or you in a task worktree in native mode (Process ladder).
+- The orchestrator does not write or commit in the main checkout. The direct-edit exception in the plugin AGENTS.md is the only way to write there, and applies only when the owner says so in that turn and the session runs with `ORCHESTRATOR_GUARD=off`.
 - Name the tier, base commit, files, acceptance criteria, and limits in every brief, as docs/05 requires. Name the rung and model too; see Rungs and models below.
 - Every brief, and every reviewer brief in particular, carries `Runtime: <floor>`: the interpreters, versions and platforms the code must run on, taken from the application repository's AGENTS.md or CLAUDE.md, or stated by the orchestrator when they are silent. Tell the reviewer that findings about code paths outside that floor are out of scope unless they are security findings. This is what keeps correction cycles off code that never runs (decision 0007).
 - Name the worker's role explicitly in the brief (for example "You are the implementer" or "You are the reviewer"), so the worker does not take the orchestrator role.
 - Update the Orca workspace comment at checkpoints: `orca worktree set --worktree active --comment "<status>" --json`.
+
+## Process ladder
+
+Decision 0009: the tier decides whether a reviewer is required; the mode decides where the work runs. Every task has a mode, native or delegated, decided before it starts from the facts in this table. No row weighs how long the work will take or how small it feels.
+
+| Mode | Who works | Where | Review | When |
+|---|---|---|---|---|
+| native | the orchestrator session itself | a task worktree it creates and moves into | trivial tier: none; normal tier: one Codex review of the diff when any code changed (docs-only diffs skip it); risky: never native | all of: one task; at most `process.native_max_files` files (default 3); one logical change; no new dependency; tier trivial or normal |
+| delegated | one Orca worker per task, plus the reviewer | the worker's worktree | by tier, as before | any of: risky tier; more than one task; tasks that could run in parallel; work that must run unattended or past a session; the owner says so |
+
+- Read the mode setting with `crew64_config.py get process.default_mode`: `auto` (the table decides), `native` (the table still forbids native for risky or multi-task work) or `delegated` (every task is delegated). `CREW64_PROCESS_MODE=auto|native|delegated` beats the file for one session. Risky tier is never native, whatever `process.default_mode` says.
+- With `features.process_ladder` off every task is delegated.
+- A plan's task rows carry a Mode column; a planned task takes its mode from its row.
+- Review in native mode follows the tier. Docs-only diffs skip Codex at normal tier; any code change gets it. A docs-only diff touches prose only: no script, hook, config or code file.
+- The model that works a native task is this session's. Record the rung the tier gives and report the session's model id as the model actually used.
+
+Native procedure:
+
+1. Create the task worktree: `orca worktree create --name <task> --parent-worktree active --setup skip --json`.
+2. Move into it (`cd <its path>`); the guard follows the session's working directory. Set the workspace comment: `orca worktree set --worktree active --comment "<task>: mode=native tier=<tier> rung=<rung>" --json`.
+3. Write the task's tests first and watch them fail.
+4. Implement. Write only inside the task worktree. The guard confines the file write tools to it; Bash is not checked there, so never write to the main checkout through Bash either.
+5. Run the repository's verification list.
+6. Commit. When bot_identity is on, push and open the pull request; when it is off, report that a human must.
+7. Review per tier, then write the completion report: the same as for delegated work plus `Mode: native`. Update the workspace comment.
+8. Leave the worktree and return to the main checkout.
+
+Escalation: count the files the task has touched (created, modified or deleted: every path in `git status --porcelain` plus `git diff --name-only <base>..HEAD`) and your own tool calls, and keep both counts in the task record. A native task that touches more than `process.native_max_files` files or passes `process.native_max_tool_calls` tool calls stops, commits its work in progress, and hands the worktree to a worker; the mode never goes back to native. The brief names the files touched and what remains. The escalation draws on the `limits.review_cycles` allowance like any other.
 
 ## Rungs and models
 
