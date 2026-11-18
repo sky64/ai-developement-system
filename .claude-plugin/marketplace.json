@@ -2,7 +2,7 @@
   "name": "crew64",
   "description": "Single-plugin marketplace so app repositories can enable the crew64 plugin from GitHub",
   "owner": {
-    "name": "Kenneth Dixon"
+    "name": "sky64"
   },
   "plugins": [
     {
