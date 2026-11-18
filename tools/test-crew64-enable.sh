@@ -145,6 +145,17 @@ bash "$ENABLE" "$R16" --no-commit >/dev/null 2>&1; rc1=$?
 bash "$ENABLE" "$R16" >/dev/null 2>&1; rc2=$?
 [ "$rc1" = 0 ] && [ "$rc2" = 0 ] && git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && ! git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && [ -z "$(git -C "$R16" status --porcelain)" ] && ok "tracked legacy config inside ignored .claude/ is renamed and committed across --no-commit and resume" || bad "legacy-in-ignored: rc1=$rc1 rc2=$rc2 HEAD=$(git -C "$R16" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R16" status --porcelain | tr '\n' ' ')"
 
+# 5h. CLAUDE.md is a symlink to AGENTS.md (new-repo convention): the orchestrator
+# line lands in AGENTS.md and that file is in the enable commit; the tree is clean.
+R20="$TMP/r20"; newrepo "$R20"; printf '# Rules\n' > "$R20/AGENTS.md"; ln -s AGENTS.md "$R20/CLAUDE.md"
+git -C "$R20" add AGENTS.md CLAUDE.md && git -C "$R20" commit -q -m "rules + symlink"
+out="$(bash "$ENABLE" "$R20" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && grep -q 'crew64:orchestrator' "$R20/AGENTS.md" && [ -L "$R20/CLAUDE.md" ] && [ -z "$(git -C "$R20" status --porcelain)" ] && git -C "$R20" show --stat HEAD | grep -q 'AGENTS.md' && ok "symlinked CLAUDE.md: AGENTS.md carries the line and is committed" || bad "symlink: rc=$rc status=$(git -C "$R20" status --porcelain | tr '\n' ' ') out=$out"
+# a symlink whose target is outside the repo is reported, not fatal
+R21="$TMP/r21"; newrepo "$R21"; printf 'x\n' > "$TMP/outside-rules.md"; ln -s "$TMP/outside-rules.md" "$R21/CLAUDE.md"; git -C "$R21" add CLAUDE.md && git -C "$R21" commit -q -m link
+out="$(bash "$ENABLE" "$R21" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && case "$out" in *"outside the repository"*) true;; *) false;; esac && ok "symlink outside the repo is reported and the run succeeds" || bad "outside symlink: rc=$rc out=$out"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

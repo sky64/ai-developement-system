@@ -169,6 +169,16 @@ for f in .claude/settings.json .claude/crew64.json CLAUDE.md; do
   fi
 done
 [ ${#ignored[@]} -eq 0 ] || echo "git: ${ignored[*]} left untracked (matched by git's exclude rules); the harness reads the working copy"
+# CLAUDE.md is often a symlink to AGENTS.md (the new-repo convention). The
+# orchestrator line was written through the link, so the target carries the
+# change and must join the commit; the link itself is unchanged.
+if [ -L "$repo/CLAUDE.md" ]; then
+  link_target="$(realpath "$repo/CLAUDE.md")"
+  case "$link_target" in
+    "$repo"/*) files+=("${link_target#"$repo"/}") ;;
+    *) echo "CLAUDE.md: symlink target $link_target is outside the repository; the orchestrator line was written there but not committed" ;;
+  esac
+fi
 # -f: every file here is either not ignored or already tracked; without it git
 # refuses the whole pathspec when a tracked file sits inside an ignored directory.
 [ ${#files[@]} -eq 0 ] || git -C "$repo" add -f -- "${files[@]}"
