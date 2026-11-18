@@ -154,7 +154,12 @@ else
 fi
 
 # 2. CLAUDE.md orchestrator line
-line='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.'
+line_head='If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill.'
+line="$line_head The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
+# The line as shipped before 0.8.1 (decision 0009 added native mode). Only this
+# exact line is rewritten on a re-run; a line the owner reworded is left alone.
+old_line="$line_head The orchestrator does not write or commit."
+legacy_replaced=0
 if [ -f "$repo/CLAUDE.md" ] && grep -qF "ai-dev-system:orchestrator" "$repo/CLAUDE.md"; then
   # Decision 0006: replace the legacy instruction in place rather than leaving a dead skill reference.
   python3 -I - "$repo/CLAUDE.md" "$line" <<'PY'
@@ -169,8 +174,54 @@ else:
 p.write_text(text)
 PY
   echo "CLAUDE.md: legacy orchestrator line replaced"
+  legacy_replaced=1
+fi
+# The rewrite works on bytes and touches nothing but the orchestrator lines: every
+# other line keeps its content and its own line ending (LF or CRLF, mixed files
+# included), and the rewritten line keeps the ending it had. With at least one
+# old line present, exactly one current line remains: the first current line when
+# there is one, otherwise the first old line rewritten in place. Without an old
+# line the file is not written at all.
+line_update=""
+if [ -f "$repo/CLAUDE.md" ]; then
+  line_update="$(python3 -I - "$repo/CLAUDE.md" "$old_line" "$line" <<'PY'
+import sys
+
+path, old, new = sys.argv[1], sys.argv[2].encode(), sys.argv[3].encode()
+with open(path, "rb") as fh:
+    entries = fh.read().splitlines(keepends=True)
+
+
+def content(entry: bytes) -> bytes:
+    return entry.rstrip(b"\r\n")
+
+
+if not any(content(entry) == old for entry in entries):
+    sys.exit(0)
+out, have_new = [], False
+keep_first_new = any(content(entry) == new for entry in entries)
+for entry in entries:
+    body = content(entry)
+    if body == new:
+        if not have_new:
+            out.append(entry)
+            have_new = True
+    elif body == old:
+        if not keep_first_new and not have_new:
+            out.append(new + entry[len(body):])
+            have_new = True
+    else:
+        out.append(entry)
+with open(path, "wb") as fh:
+    fh.write(b"".join(out))
+print("updated")
+PY
+)"
+fi
+if [ "$line_update" = updated ]; then
+  echo "CLAUDE.md: orchestrator line updated (main-checkout wording, decision 0009)"
 elif [ -f "$repo/CLAUDE.md" ] && grep -qF "crew64:orchestrator" "$repo/CLAUDE.md"; then
-  echo "CLAUDE.md: orchestrator line already present"
+  [ "$legacy_replaced" = 1 ] || echo "CLAUDE.md: orchestrator line already present"
 else
   { [ -f "$repo/CLAUDE.md" ] && [ -s "$repo/CLAUDE.md" ] && printf '\n'; printf '%s\n' "$line"; } >> "$repo/CLAUDE.md"
   echo "CLAUDE.md: orchestrator line added"

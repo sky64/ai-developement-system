@@ -80,12 +80,12 @@ The specialist selection step in [05-delegation.md](05-delegation.md) searches t
 A plugin cannot force a session to adopt a role. Put this in the application repository's `CLAUDE.md`. Every session in the project reads that file, including workers, so the line is scoped to the orchestrator:
 
 ```markdown
-If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a child role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit.
+If you were started as the project orchestrator and were not assigned a specific implementer or reviewer role in your prompt, invoke the crew64:orchestrator skill at session start. A session whose prompt assigns it a worker role (implementer, reviewer) keeps that role and does not invoke the skill. The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree.
 ```
 
 A spawn prompt must name the child role explicitly (for example "You are the implementer"), otherwise the child may read the line above as applying to it. The skill also tells a session with an explicitly assigned child role to keep that role.
 
-The skill reads `${CLAUDE_PLUGIN_ROOT}/AGENTS.md` and `${CLAUDE_PLUGIN_ROOT}/docs/05-delegation.md`. The [skills reference](https://code.claude.com/docs/en/skills.md) states that `${CLAUDE_PLUGIN_ROOT}` is substituted in plugin skill content. The application's own `AGENTS.md` and `CLAUDE.md` govern application specifics. Statements in this repository's `AGENTS.md` about itself (setup workspace, no application build, its verification list) refer to the development-system repository. The orchestrator does not write or commit.
+The skill reads `${CLAUDE_PLUGIN_ROOT}/AGENTS.md` and `${CLAUDE_PLUGIN_ROOT}/docs/05-delegation.md`. The [skills reference](https://code.claude.com/docs/en/skills.md) states that `${CLAUDE_PLUGIN_ROOT}` is substituted in plugin skill content. The application's own `AGENTS.md` and `CLAUDE.md` govern application specifics. Statements in this repository's `AGENTS.md` about itself (setup workspace, no application build, its verification list) refer to the development-system repository. The orchestrator does not write or commit in the main checkout; a small, bounded task it may do itself in a task worktree ([docs/05](05-delegation.md), Process ladder).
 
 ## Known behavior
 

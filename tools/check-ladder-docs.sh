@@ -159,7 +159,7 @@ need skills/orchestrator/SKILL.md "Runtime:"
 need skills/orchestrator/SKILL.md "outside that floor are out of scope"
 need docs/05-delegation.md "Runtime:"
 need AGENTS.md "Python 3.13+"
-need .claude-plugin/plugin.json '"version": "0.8.0"'
+need .claude-plugin/plugin.json '"version": "0.8.1"'
 # Field fixes 2026-11-18: briefs travel by --spec-file from the scratchpad.
 need skills/orchestrator/SKILL.md "--spec-file"
 need skills/orchestrator/SKILL.md "the guard allows Write and Edit there"
@@ -269,6 +269,13 @@ need docs/05-delegation.md "none for a docs-only native diff"
 forbid README.md "orchestrates without writing code"
 forbid docs/05-delegation.md "the orchestrator does not code"
 need docs/05-delegation.md "# Delegation policy: the orchestrator does not write in the main checkout"
+# The orchestrator line harness-enable writes into an application repo's CLAUDE.md.
+need tools/crew64-enable.sh "The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
+need docs/11-plugin-install.md "The orchestrator does not write or commit in the main checkout; in native mode it works in a task worktree."
+forbid docs/11-plugin-install.md "The orchestrator does not write or commit."
+# This repository's own CLAUDE.md agrees with AGENTS.md on native mode.
+need CLAUDE.md "in the main checkout"
+forbid CLAUDE.md "does not write code; specialists implement"
 
 # Decision 0005: the defaults file validates, and every model id it ships
 # appears in the docs/05 ladder table, so the table and the file cannot drift.
