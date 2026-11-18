@@ -123,6 +123,14 @@ bash "$ENABLE" "$R13" >/dev/null 2>&1; rc=$?
 [ "$rc" = 0 ] && ! git -C "$R13" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && git -C "$R13" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && [ -z "$(git -C "$R13" status --porcelain)" ] && ok "migration resumed after --no-commit commits the legacy deletion" || bad "resumed migration: rc=$rc HEAD=$(git -C "$R13" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R13" status --porcelain | tr '\n' ' ')"
 [ "$(grep -c 'orchestrator skill at session start' "$R13/CLAUDE.md")" = 1 ] && grep -q 'crew64:orchestrator' "$R13/CLAUDE.md" && grep -q '^intro line$' "$R13/CLAUDE.md" && ok "legacy line next to an existing crew64 line is removed, not duplicated" || bad "dedupe: $(grep -c 'orchestrator skill' "$R13/CLAUDE.md") orchestrator lines"
 
+# A repo that gitignores .claude (common in public repos) must still enable: the ignored files are
+# written and reported as left untracked, the trackable edits (CLAUDE.md) are committed, exit 0.
+R14="$TMP/r14"; newrepo "$R14"; printf '.claude/\n' > "$R14/.gitignore"; git -C "$R14" add .gitignore && git -C "$R14" commit -q -m ignore
+out="$(bash "$ENABLE" "$R14" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ -e "$R14/.claude/crew64.json" ] && [ -e "$R14/.claude/settings.json" ] && case "$out" in *"left untracked"*) true;; *) false;; esac && ok "ignored .claude: files written, reported as left untracked, exit 0" || bad "ignored .claude: rc=$rc out=$(echo "$out" | tail -2 | tr '\n' ' ')"
+git -C "$R14" ls-files --error-unmatch CLAUDE.md >/dev/null 2>&1 && [ "$(git -C "$R14" log -1 --format=%s)" = "chore: enable crew64 plugin" ] && [ -z "$(git -C "$R14" status --porcelain)" ] && ok "ignored .claude: CLAUDE.md committed and the tree is clean" || bad "ignored .claude commit: last=$(git -C "$R14" log -1 --format=%s) status=$(git -C "$R14" status --porcelain | tr '\n' ' ')"
+git config --global --get-all crew64.trustedRoot | grep -qxF "$(realpath "$R14")" && ok "ignored .claude: repo still registered as a trusted root" || bad "ignored .claude: not registered"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?
