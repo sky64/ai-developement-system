@@ -56,8 +56,9 @@ WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 # The session scratchpad. A write tool may target /tmp or $TMPDIR from any
 # checkout (field fixes 2026-11-18): orchestrators write worker briefs there
 # and pass them with worker-start --spec-file. Same no-climb rule as the Bash
-# redirect check, realpath so a symlink out of /tmp into a repo is denied, and
-# never inside a git working tree, so a repository under /tmp stays a repository.
+# redirect check, realpath so a symlink out of /tmp into a repo is denied, never
+# inside a repository or its .git (a repository under /tmp stays a repository),
+# and never behind a mount nested in the scratch root (bind-mount aliases).
 SCRATCH_ROOT = "/tmp"
 
 
@@ -66,42 +67,84 @@ def _under(path: str, root: str) -> bool:
     return path == real_root or path.startswith(real_root.rstrip(os.sep) + os.sep)
 
 
-def inside_git_work_tree(real_path: str) -> bool:
-    """True when real_path (existing or not) lies inside some git working tree.
-    Asked of the nearest existing ancestor, so a repository's own .git answers
-    for it; a worker that skews its worktree's git state cannot hide that."""
+def inside_repository(real_path: str) -> bool:
+    """True when real_path (existing or not) is git metadata or lies under a
+    directory that holds a .git entry (a repository or a linked worktree).
+    Pure filesystem walk: no git subprocess, so GIT_DIR, GIT_CEILING_DIRECTORIES
+    and the like cannot steer it (Codex review of PR 20, findings 1 and 2).
+    Any error while looking counts as inside: the allowance fails closed."""
+    if ".git" in real_path.split(os.sep):
+        return True
     probe = real_path
-    while probe and not os.path.isdir(probe):
-        parent = os.path.dirname(probe)
-        if parent == probe:
-            break
-        probe = parent
     try:
-        out = subprocess.run(
-            ["git", "-C", probe, "rev-parse", "--is-inside-work-tree"],
-            capture_output=True, text=True, timeout=5, check=False,
-        )
-    except Exception:
-        return True  # cannot tell: treat as a repository and deny the allowance
-    return out.returncode == 0 and out.stdout.strip() == "true"
+        while True:
+            if os.path.lexists(os.path.join(probe, ".git")):
+                return True
+            parent = os.path.dirname(probe)
+            if parent == probe:
+                return False
+            probe = parent
+    except OSError:
+        return True
+
+
+def _mount_points():
+    """Mount points visible to this process, from /proc/self/mountinfo.
+    None when it cannot be read (the caller then denies the allowance)."""
+    try:
+        with open("/proc/self/mountinfo", encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return None
+    points = []
+    for line in lines:
+        fields = line.split(" ")
+        if len(fields) > 4:
+            raw = fields[4]  # mountinfo escapes space, tab, newline, backslash as octal
+            for esc, ch in (("\\040", " "), ("\\011", "\t"), ("\\012", "\n"), ("\\134", "\\")):
+                raw = raw.replace(esc, ch)
+            points.append(raw)
+    return points
+
+
+def crosses_mount_under(real_path: str, root: str) -> bool:
+    """True when a mount point other than root itself sits between root and
+    real_path. realpath does not see bind mounts, so a repository directory
+    bound onto a scratch path would pass the path tests; a nested mount inside
+    the scratch root is therefore refused (Codex review of PR 20, finding 3)."""
+    points = _mount_points()
+    if points is None:
+        return True
+    real_root = os.path.realpath(root)
+    for point in points:
+        real_point = os.path.realpath(point)
+        if real_point == real_root:
+            continue
+        if _under(real_point, real_root) and _under(real_path, real_point):
+            return True
+    return False
 
 
 def scratch_target(target: str, env=None) -> bool:
     """True when target is a session scratch path: absolute, no '..' segment,
-    its real path under /tmp or under $TMPDIR, and not inside any git working
-    tree. A TMPDIR inside a working tree is ignored for the same reason."""
+    its real path under /tmp or under $TMPDIR, not inside any repository or
+    its metadata, and not behind a mount nested in the scratch root. A TMPDIR
+    inside a repository is ignored for the same reason."""
     env = os.environ if env is None else env
     if not os.path.isabs(target) or ".." in target.split(os.sep):
         return False
     real = os.path.realpath(target)
+    root = SCRATCH_ROOT
     if not _under(real, SCRATCH_ROOT):
         tmpdir = env.get("TMPDIR")
         if not tmpdir or not os.path.isabs(tmpdir):
             return False
-        real_tmpdir = os.path.realpath(tmpdir)
-        if not _under(real, real_tmpdir) or inside_git_work_tree(real_tmpdir):
+        root = os.path.realpath(tmpdir)
+        if not _under(real, root) or inside_repository(root):
             return False
-    return not inside_git_work_tree(real)
+    if inside_repository(real):
+        return False
+    return not crosses_mount_under(real, root)
 
 GIT_DENY = {
     "commit", "add", "apply", "am", "cherry-pick", "merge", "rebase", "reset",

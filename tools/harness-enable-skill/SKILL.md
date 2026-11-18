@@ -16,7 +16,7 @@ Run the script with the repository path (defaults to the current directory):
 bash ~/.claude/skills/harness-enable/enable.sh /path/to/repo [--config <crew64.json>] [--no-commit] [--no-skill]
 ```
 
-Flags: `--no-commit` leaves the files staged but uncommitted; `--no-skill` skips refreshing this wrapper.
+Flags: `--no-commit` leaves the files staged but uncommitted; `--no-skill` skips refreshing this wrapper. `enable.sh --print-real` prints the plugin script this wrapper forwards to.
 
 What it does, in order:
 

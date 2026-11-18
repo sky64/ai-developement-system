@@ -174,6 +174,19 @@ mkdir -p "$TMP/ro"; chmod 500 "$TMP/ro"
 out="$(HOME="$TMP/ro" bash "$ENABLE" "$R22" 2>&1)"; rc=$?; chmod 700 "$TMP/ro"
 [ "$rc" = 0 ] && case "$out" in *"skill: skipped ("*) true;; *) false;; esac && ok "unwritable HOME: wrapper skipped, run succeeds" || bad "ro HOME: rc=$rc out=$(echo "$out" | grep skill)"
 
+# 5j. (Codex cycle 1) the wrapper renders the canonical script path literally: a plugin
+# path with sed and shell metacharacters, and a plugin reached through a directory symlink.
+P="$TMP/plug|&and"; mkdir -p "$P"; cp -r "$ROOT/tools" "$ROOT/config" "$P/"
+H2="$TMP/home2"; mkdir -p "$H2"; R23="$TMP/r23"; newrepo "$R23"
+out="$(HOME="$H2" bash "$P/tools/crew64-enable.sh" "$R23" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && grep -q 'crew64@crew64' "$R23/.claude/settings.json" && ok "metacharacter plugin path: run succeeds and settings are written" || bad "meta path run: rc=$rc out=$(echo "$out" | head -3 | tr '\n' ' ')"
+real_meta="$(bash "$H2/.claude/skills/harness-enable/enable.sh" --print-real 2>/dev/null)"
+[ "$real_meta" = "$P/tools/crew64-enable.sh" ] && ok "wrapper points at the metacharacter path literally" || bad "wrapper real path: '$real_meta'"
+ln -s "$P" "$TMP/plug-alias"; H3="$TMP/home3"; mkdir -p "$H3"; R24="$TMP/r24"; newrepo "$R24"
+HOME="$H3" bash "$TMP/plug-alias/tools/crew64-enable.sh" "$R24" >/dev/null 2>&1
+real_alias="$(bash "$H3/.claude/skills/harness-enable/enable.sh" --print-real 2>/dev/null)"
+[ "$real_alias" = "$P/tools/crew64-enable.sh" ] && ok "wrapper records the physical script path, not the symlink alias" || bad "wrapper alias: '$real_alias'"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

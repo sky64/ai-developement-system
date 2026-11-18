@@ -74,6 +74,22 @@ run 2 "$M" Write  "{\"file_path\":\"$SCR/b.md\",\"content\":\"hi\"}"            
 rmdir "$SCR"
 runenv TMPDIR="$M/tmp" 2 "$M" Write "{\"file_path\":\"$M/tmp/b.md\",\"content\":\"hi\"}"              # TMPDIR inside the repo: ignored
 run 2 "$M" Write  '{"file_path":"tmp/b.md","content":"hi"}'                                             # relative: not scratch
+# Codex review of PR 20, cycle 1: git metadata, skewed git discovery and bind mounts are never scratch.
+run 2 "$M" Write  "{\"file_path\":\"$M/.git/config\",\"content\":\"hi\"}"                      # (1) own .git from main
+run 2 "$W" Write  "{\"file_path\":\"$M/.git/hooks/new\",\"content\":\"hi\"}"                   # (1) main's .git from a worktree
+git -C "$TMP" init -q other && git -C "$TMP/other" commit -q --allow-empty -m o; mkdir -p "$TMP/other/sub"
+run 2 "$W" Write  "{\"file_path\":\"$TMP/other/.git/hooks/new\",\"content\":\"hi\"}"           # (1) another repo's .git
+run 2 "$W" Write  "{\"file_path\":\"$TMP/other/sub/file\",\"content\":\"hi\"}"                 # another repo under /tmp
+runenv GIT_DIR="$TMP/nonexistent" 2 "$W" Write "{\"file_path\":\"$TMP/other/sub/file\",\"content\":\"hi\"}"   # (2) invalid GIT_DIR
+runenv GIT_CEILING_DIRECTORIES="$TMP/other" 2 "$W" Write "{\"file_path\":\"$TMP/other/sub/deeper/file\",\"content\":\"hi\"}"  # (2) ceiling hides the repo
+if unshare -Urm true 2>/dev/null; then
+  # (3) a bind mount of the main checkout's docs/ onto a scratch dir aliases the repo; realpath cannot see it.
+  mkdir -p "$M/docs" "$TMP/bindscratch"
+  got="$(unshare -Urm bash -c "mount --bind '$M/docs' '$TMP/bindscratch' && printf '{\"tool_name\":\"Write\",\"cwd\":\"%s\",\"tool_input\":{\"file_path\":\"%s\",\"content\":\"hi\"}}' '$M' '$TMP/bindscratch/new.md' | ORCHESTRATOR_GUARD= python3 -I '$HOOK' >/dev/null 2>&1; echo \$?")"
+  [ "$got" = 2 ] && echo "ok   exit 2  Write via bind mount of the repo onto /tmp (namespace)" || { echo "FAIL exit $got (want 2)  bind-mounted repo dir under /tmp"; fail=1; }
+else
+  echo "skip bind-mount case: unshare -Urm unavailable"
+fi
 
 # P1: orca exemption only for a single plain invocation.
 run 2 "$M" Bash   '{"command":"orca status; git add README.md"}'

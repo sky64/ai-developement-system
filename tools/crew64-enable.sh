@@ -64,8 +64,16 @@ if [ "$skill" = 0 ]; then
   echo "skill: skipped (--no-skill)"
 else
   skill_src="$plugin_root/tools/harness-enable-skill"
-  rendered="$(sed "s|@CREW64_ENABLE@|$plugin_root/tools/crew64-enable.sh|" "$skill_src/enable.sh.tmpl")"
-  if ! mkdir -p "$skill_dir" 2>/dev/null || [ ! -w "$skill_dir" ]; then
+  # The physical path (a directory symlink alias would go stale) rendered as a
+  # shell-quoted literal, so | & and quotes in the path survive (Codex, PR 20).
+  rendered="$(python3 -I - "$(realpath "$0")" "$skill_src/enable.sh.tmpl" <<'PY' 2>/dev/null || true
+import shlex, sys
+print(open(sys.argv[2], encoding="utf-8").read().replace("@CREW64_ENABLE@", shlex.quote(sys.argv[1])), end="")
+PY
+)"
+  if [ -z "$rendered" ]; then
+    echo "skill: skipped (could not render the wrapper from $skill_src)"
+  elif ! mkdir -p "$skill_dir" 2>/dev/null || [ ! -w "$skill_dir" ]; then
     echo "skill: skipped ($skill_dir is not writable)"
   elif [ -f "$skill_dir/enable.sh" ] && [ -f "$skill_dir/SKILL.md" ] \
        && [ "$(cat "$skill_dir/enable.sh")" = "$rendered" ] && cmp -s "$skill_src/SKILL.md" "$skill_dir/SKILL.md"; then
