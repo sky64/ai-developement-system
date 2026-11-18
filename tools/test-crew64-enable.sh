@@ -131,6 +131,20 @@ out="$(bash "$ENABLE" "$R14" 2>&1)"; rc=$?
 git -C "$R14" ls-files --error-unmatch CLAUDE.md >/dev/null 2>&1 && [ "$(git -C "$R14" log -1 --format=%s)" = "chore: enable crew64 plugin" ] && [ -z "$(git -C "$R14" status --porcelain)" ] && ok "ignored .claude: CLAUDE.md committed and the tree is clean" || bad "ignored .claude commit: last=$(git -C "$R14" log -1 --format=%s) status=$(git -C "$R14" status --porcelain | tr '\n' ' ')"
 git config --global --get-all crew64.trustedRoot | grep -qxF "$(realpath "$R14")" && ok "ignored .claude: repo still registered as a trusted root" || bad "ignored .claude: not registered"
 
+# Codex PR 18: files already TRACKED inside an ignored .claude/ must still be staged and committed,
+# including a tracked legacy config renamed inside that ignored directory, with and without --no-commit.
+R15="$TMP/r15"; newrepo "$R15"; mkdir -p "$R15/.claude"
+printf '{\n  "permissions": {}\n}\n' > "$R15/.claude/settings.json"; git -C "$R15" add -f .claude/settings.json && git -C "$R15" commit -q -m "tracked settings"
+printf '.claude/\n' > "$R15/.gitignore"; git -C "$R15" add .gitignore && git -C "$R15" commit -q -m ignore
+out="$(bash "$ENABLE" "$R15" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && grep -q '"crew64@crew64": true' "$R15/.claude/settings.json" && [ "$(git -C "$R15" log -1 --format=%s)" = "chore: enable crew64 plugin" ] && git -C "$R15" show --name-only --format= HEAD | grep -qx '.claude/settings.json' && ok "tracked settings.json inside ignored .claude/ is staged and committed" || bad "tracked-in-ignored: rc=$rc last=$(git -C "$R15" log -1 --format=%s) out=$(echo "$out" | tail -1)"
+R16="$TMP/r16"; newrepo "$R16"; mkdir -p "$R16/.claude"; cp "$DEFAULTS" "$R16/.claude/ai-dev-system.json"
+git -C "$R16" add -f .claude/ai-dev-system.json && git -C "$R16" commit -q -m "old config tracked"
+printf '.claude/\n' > "$R16/.gitignore"; git -C "$R16" add .gitignore && git -C "$R16" commit -q -m ignore
+bash "$ENABLE" "$R16" --no-commit >/dev/null 2>&1; rc1=$?
+bash "$ENABLE" "$R16" >/dev/null 2>&1; rc2=$?
+[ "$rc1" = 0 ] && [ "$rc2" = 0 ] && git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/crew64.json' && ! git -C "$R16" ls-tree --name-only HEAD .claude/ | grep -qx '.claude/ai-dev-system.json' && [ -z "$(git -C "$R16" status --porcelain)" ] && ok "tracked legacy config inside ignored .claude/ is renamed and committed across --no-commit and resume" || bad "legacy-in-ignored: rc1=$rc1 rc2=$rc2 HEAD=$(git -C "$R16" ls-tree --name-only HEAD .claude/ | tr '\n' ' ') status=$(git -C "$R16" status --porcelain | tr '\n' ' ')"
+
 # 5. --no-commit stages only
 R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?

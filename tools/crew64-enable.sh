@@ -168,8 +168,10 @@ for f in .claude/settings.json .claude/crew64.json CLAUDE.md; do
     files+=("$f")
   fi
 done
-[ ${#ignored[@]} -eq 0 ] || echo "git: ${ignored[*]} left untracked (ignored by this repository's .gitignore); the harness reads the working copy"
-[ ${#files[@]} -eq 0 ] || git -C "$repo" add -- "${files[@]}"
+[ ${#ignored[@]} -eq 0 ] || echo "git: ${ignored[*]} left untracked (matched by git's exclude rules); the harness reads the working copy"
+# -f: every file here is either not ignored or already tracked; without it git
+# refuses the whole pathspec when a tracked file sits inside an ignored directory.
+[ ${#files[@]} -eq 0 ] || git -C "$repo" add -f -- "${files[@]}"
 # The rename's deletion side belongs in the same commit, also when a previous
 # --no-commit run already staged it (the file is then gone from the tree but
 # still present in HEAD).
@@ -186,7 +188,11 @@ if [ "$commit" = 1 ]; then
     exit 1
   fi
 else
-  echo "commit: skipped (--no-commit); files are staged"
+  if [ ${#files[@]} -gt 0 ] && ! git -C "$repo" diff --cached --quiet -- "${files[@]}"; then
+    echo "commit: skipped (--no-commit); files are staged"
+  else
+    echo "commit: skipped (--no-commit); nothing staged"
+  fi
 fi
 echo
 echo "The plugin applies once this folder is trusted in Claude Code. Edit .claude/crew64.json to turn features on or off (docs/05-delegation.md). Orca's per-repo setup script is a UI setting; check it before creating worktrees with setup enabled."
