@@ -7,7 +7,8 @@
     "metering": "none",
     "build_map": false,
     "scout64": true,
-    "process_ladder": true
+    "process_ladder": true,
+    "native_worktree_access": true
   },
   "limits": {
     "review_cycles": 2
@@ -19,7 +20,8 @@
   },
   "platform": {
     "kind": "orca",
-    "hosts": {}
+    "hosts": {},
+    "worktree_root": "~/orca/workspaces"
   },
   "gateway": {
     "kind": "none",
@@ -31,6 +33,7 @@
     }
   },
   "models": {
+    "orchestrator": "claude-fable-5-1",
     "research": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
     "claude_implementer": ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"],
     "codex_reviewer": {

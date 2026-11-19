@@ -40,10 +40,14 @@ CONFIG_REL = os.path.join(".claude", "crew64.json")
 VERSION = 1
 BOOL_FEATURES = (
     "orchestrator_guard", "model_ladder", "bot_identity", "build_map", "scout64", "process_ladder",
+    "native_worktree_access",
 )
 # Switches added after the first release: a config without the key validates
 # and reads as the shipped default, so repos enabled earlier keep working.
-OPTIONAL_FEATURES = ("scout64", "process_ladder")
+OPTIONAL_FEATURES = ("scout64", "process_ladder", "native_worktree_access")
+# Keys added after the first release outside features: absent reads as the
+# shipped default, and an absent models key is no deviation.
+OPTIONAL_KEYS = ("models.orchestrator", "platform.worktree_root")
 METERING_KINDS = ("none", "solvela", "openai-compatible")
 ENV_PREFIX = "CREW64_FEATURE_"
 LIMITS = ("review_cycles",)
@@ -318,6 +322,8 @@ def deviations(cfg: dict, base: dict):
         if isinstance(a, dict) and isinstance(b, dict):
             for key in sorted(set(a) | set(b)):
                 walk(a.get(key), b.get(key), f"{prefix}.{key}")
+        elif a is None and prefix in OPTIONAL_KEYS:
+            return
         elif a != b:
             out.append(prefix)
 
@@ -411,6 +417,10 @@ def check(data) -> list:
                 problems.append(f"platform.hosts.{key} must be an object")
             elif "hostnames" in entry and not _valid_hostnames(entry["hostnames"]):
                 problems.append(f"platform.hosts.{key}.hostnames must be a list of host names")
+    if isinstance(platform, dict) and "worktree_root" in platform:
+        root = platform["worktree_root"]
+        if not (isinstance(root, str) and root.strip()):
+            problems.append("platform.worktree_root must be a path")
     gateway = data.get("gateway")
     if not isinstance(gateway, dict) or gateway.get("kind") not in METERING_KINDS:
         problems.append(f"gateway.kind must be one of {', '.join(METERING_KINDS)}")
@@ -418,6 +428,10 @@ def check(data) -> list:
     if not isinstance(models, dict):
         problems.append("models must be an object")
     else:
+        if "orchestrator" in models:
+            oid = models["orchestrator"]
+            if not (isinstance(oid, str) and oid.strip()):
+                problems.append("models.orchestrator must be a model id")
         for role in ("research", "claude_implementer"):
             ids = models.get(role)
             if not (isinstance(ids, list) and len(ids) == 3 and all(isinstance(i, str) for i in ids)):
@@ -493,7 +507,13 @@ def cli(argv) -> int:
                 return 1
             return 0
         try:
-            _print_value(_get(cfg if cfg is not None else defaults(), key))
+            try:
+                value = _get(cfg if cfg is not None else defaults(), key)
+            except KeyError:
+                if key not in OPTIONAL_KEYS:
+                    raise
+                value = _get(defaults(), key)
+            _print_value(value)
         except KeyError:
             sys.stderr.write(f"crew64_config: no such key {key}\n")
             return 1
