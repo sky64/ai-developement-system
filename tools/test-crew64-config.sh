@@ -266,4 +266,37 @@ python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["process"]={"d
 out="$(run "$M3" status)"
 case "$out" in *"config=untrusted:"*"process=auto max_files=3 max_calls=40"*) ok "untrusted root keeps the default process values";; *) bad "untrusted process: $out";; esac
 
+# 25. this_host: which platform.hosts entry is the machine running the reader
+sethosts() { # <hosts-json> : write defaults with platform.hosts = value
+  mkdir -p "$M/.claude"; python3 -I -c '
+import json,sys
+d=json.load(open(sys.argv[1])); d["platform"]["hosts"]=json.loads(sys.argv[2]); json.dump(d,open(sys.argv[3],"w"))' "$DEFAULTS" "$1" "$M/.claude/crew64.json"; }
+HN="$(python3 -I -c 'import socket; print(socket.gethostname().split(".")[0])')"
+HNU="$(printf '%s' "$HN" | tr '[:lower:]' '[:upper:]')"
+sethosts '{}'
+out="$(run "$M" status)"; case "$out" in *" hosts=none this_host=none gateway="*) ok "no hosts → this_host=none after hosts";; *) bad "no hosts this_host: $out";; esac
+sethosts "{\"box-a\": {\"hostnames\": [\"not-this-machine\"]}, \"box-b\": {\"hostnames\": [\"$HN\"]}}"
+out="$(run "$M" status)"; case "$out" in *"hosts=box-a,box-b this_host=box-b "*) ok "hostnames match the short hostname → this_host=box-b";; *) bad "hostname match: $out";; esac
+out="$(run "$W" status)"; case "$out" in *"this_host=box-b "*) ok "this_host is the same from a worktree";; *) bad "worktree this_host: $out";; esac
+out="$(run "$M" check "$M/.claude/crew64.json")"; [ $? = 0 ] && ok "check accepts hostnames lists" || bad "check hostnames: $out"
+sethosts "{\"box-b\": {\"hostnames\": [\"$HNU.example.net\"]}}"
+out="$(run "$M" status)"; case "$out" in *"this_host=box-b "*) ok "hostname match ignores case and a domain suffix";; *) bad "case/fqdn match: $out";; esac
+sethosts '{"box-a": {"deepseek_agent": "dsh-tui"}}'
+out="$(run "$M" status)"; case "$out" in *"hosts=box-a this_host=none "*) ok "an entry without hostnames never matches";; *) bad "no hostnames entry: $out";; esac
+out="$(cd "$M" && CREW64_THIS_HOST=box-a python3 -I "$MOD" status 2>&1)"; case "$out" in *"this_host=box-a "*) ok "CREW64_THIS_HOST names an entry → this_host";; *) bad "env this_host: $out";; esac
+out="$(cd "$M" && CREW64_THIS_HOST=box-z python3 -I "$MOD" status 2>&1)"; case "$out" in *"this_host=none "*) ok "CREW64_THIS_HOST naming no entry → none";; *) bad "env unknown this_host: $out";; esac
+out="$(run "$M" get this_host)"; [ "$out" = "box-a" ] || [ "$out" = "none" ] && true
+out="$(cd "$M" && CREW64_THIS_HOST=box-a python3 -I "$MOD" get this_host 2>&1)"; [ "$out" = "box-a" ] && ok "get this_host prints the entry key" || bad "get this_host: $out"
+for v in '"omarchy"' '[]' '[""]' '[3]'; do
+  sethosts "{\"box-a\": {\"hostnames\": $v}}"
+  out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+  [ "$rc" = 1 ] && case "$out" in *"platform.hosts.box-a.hostnames must be a list of host names"*) true;; *) false;; esac && ok "check hostnames $v → exit 1" || bad "check hostnames $v: rc=$rc out=$out"
+  out="$(run "$M" status)"; case "$out" in *"this_host=none "*) ok "invalid hostnames $v never match";; *) bad "invalid hostnames status $v: $out";; esac
+done
+sethosts '{"box-a": "dsh-tui"}'
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"platform.hosts.box-a must be an object"*) true;; *) false;; esac && ok "check a non-object host entry → exit 1" || bad "check host entry: rc=$rc out=$out"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["platform"]["hosts"]={"box-u":{"hostnames":[sys.argv[3]]}}; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/crew64.json" "$HN"
+out="$(run "$M3" status)"; case "$out" in *"config=untrusted:"*"hosts=none this_host=none "*) ok "untrusted root's hosts are not applied";; *) bad "untrusted this_host: $out";; esac
+
 exit $fail
