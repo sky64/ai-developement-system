@@ -162,14 +162,45 @@ fi
 # the untracked .claude/settings.local.json, which is kept out of git through
 # .git/info/exclude when nothing ignores it already. Read after 1c: the reader
 # trusts this repo's config only once it is registered.
+# A symlinked .claude or settings.local.json would redirect the write to a file
+# outside the repository, and a tracked one would carry a machine path into git;
+# both are skipped with a warning (security review of PR 28).
 access="$(cd "$repo" && python3 -I "$reader" get features.native_worktree_access)"
-if [ "$access" = "true" ]; then
+if [ "$access" = "true" ] && { [ -L "$repo/.claude" ] || [ -L "$repo/.claude/settings.local.json" ]; }; then
+  echo "worktree access: skipped, .claude or .claude/settings.local.json is a symlink; list the worktree directory by hand if you want native mode" >&2
+elif [ "$access" = "true" ] && git -C "$repo" ls-files --error-unmatch .claude/settings.local.json >/dev/null 2>&1; then
+  echo "worktree access: skipped, .claude/settings.local.json is tracked by git and must stay machine-local; untrack it and re-run" >&2
+elif [ "$access" = "true" ]; then
+  # Make git ignore the file before writing it, and prove it: a tracked
+  # .gitignore negation outranks .git/info/exclude (Codex, PR 28).
+  if ! git -C "$repo" check-ignore -q .claude/settings.local.json; then
+    exclude="$(git -C "$repo" rev-parse --absolute-git-dir)/info/exclude"
+    mkdir -p "$(dirname "$exclude")"
+    if ! grep -qxF '.claude/settings.local.json' "$exclude" 2>/dev/null; then
+      # Start on a fresh line when the file's last line has no newline.
+      if [ -s "$exclude" ] && [ -n "$(tail -c 1 "$exclude")" ]; then printf '\n' >> "$exclude"; fi
+      printf '.claude/settings.local.json\n' >> "$exclude"
+      echo "worktree access: .claude/settings.local.json added to .git/info/exclude"
+    fi
+    if ! git -C "$repo" check-ignore -q .claude/settings.local.json; then
+      echo "crew64-enable: .claude/settings.local.json is not ignored by git even after .git/info/exclude (a .gitignore rule such as !.claude/settings.local.json un-ignores it); remove that rule or set features.native_worktree_access to false, then re-run" >&2
+      exit 1
+    fi
+  fi
   wt_root="$(cd "$repo" && python3 -I "$reader" get platform.worktree_root)"
   python3 -I - "$repo/.claude/settings.local.json" "$wt_root" "$(basename "$repo")" <<'PY'
-import json, os, pathlib, sys
+import json, os, pathlib, sys, tempfile
 p, root, name = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+if p.is_symlink() or p.parent.is_symlink():
+    sys.exit("crew64-enable: .claude/settings.local.json or .claude became a symlink; not written")
 want = os.path.normpath(os.path.join(os.path.expanduser(root), name))
-d = json.loads(p.read_text()) if p.exists() and p.read_text().strip() else {}
+if p.exists():
+    try:
+        d = json.loads(p.read_text())
+    except ValueError:
+        sys.exit("crew64-enable: .claude/settings.local.json is not valid JSON; fix it and re-run")
+else:
+    d = {}
 if not isinstance(d, dict):
     sys.exit("crew64-enable: .claude/settings.local.json is not a JSON object; fix it and re-run")
 perms = d.setdefault("permissions", {})
@@ -180,17 +211,14 @@ if want in dirs:
     print(f"worktree access: {want} already listed in .claude/settings.local.json")
 else:
     dirs.append(want)
-    p.write_text(json.dumps(d, indent=2) + "\n")
+    # Write a temp file beside it and rename over: the rename replaces a
+    # symlink placed in between rather than following it.
+    fd, tmp = tempfile.mkstemp(dir=p.parent, prefix=".settings.local.", suffix=".tmp")
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps(d, indent=2) + "\n")
+    os.replace(tmp, p)
     print(f"worktree access: {want} added to .claude/settings.local.json")
 PY
-  if ! git -C "$repo" check-ignore -q .claude/settings.local.json; then
-    exclude="$(git -C "$repo" rev-parse --absolute-git-dir)/info/exclude"
-    mkdir -p "$(dirname "$exclude")"
-    if ! grep -qxF '.claude/settings.local.json' "$exclude" 2>/dev/null; then
-      printf '.claude/settings.local.json\n' >> "$exclude"
-      echo "worktree access: .claude/settings.local.json added to .git/info/exclude"
-    fi
-  fi
 else
   echo "worktree access: off (features.native_worktree_access is false); native tasks will run delegated"
 fi

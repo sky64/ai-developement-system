@@ -10,6 +10,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 printf '#!/usr/bin/env bash\necho "{}"\n' > "$TMP/orca-stub"; chmod +x "$TMP/orca-stub"
 export ORCA_CLI_COMMAND="$TMP/orca-stub"
 export GIT_CONFIG_GLOBAL="$TMP/gitconfig"; : > "$GIT_CONFIG_GLOBAL"
+export XDG_CONFIG_HOME="$TMP/xdg"   # the user's own git ignore file must not leak in
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@x GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@x
 mkdir -p "$TMP/home-default"; export HOME="$TMP/home-default"   # the wrapper install never touches the real home
 fail=0
@@ -295,5 +296,30 @@ got="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["permi
 R10="$TMP/accessrepo5"; newrepo "$R10"; mkdir -p "$R10/.claude"; echo '[1]' > "$R10/.claude/settings.local.json"
 out="$(bash "$ENABLE" "$R10" 2>&1)"; rc=$?
 [ "$rc" != 0 ] && [ "$(cat "$R10/.claude/settings.local.json")" = "[1]" ] && case "$out" in *"settings.local.json is not a JSON object"*) true;; *) false;; esac && ok "a non-object settings.local.json stops enable and is left alone" || bad "non-object local settings: rc=$rc out=$out"
+
+# a symlinked settings.local.json or .claude, or a tracked settings.local.json, is skipped and its target untouched
+R11="$TMP/accessrepo6"; newrepo "$R11"; mkdir -p "$R11/.claude"; echo '{"keep": 1}' > "$TMP/victim.json"
+ln -s "$TMP/victim.json" "$R11/.claude/settings.local.json"
+out="$(bash "$ENABLE" "$R11" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ "$(cat "$TMP/victim.json")" = '{"keep": 1}' ] && [ -L "$R11/.claude/settings.local.json" ] && case "$out" in *"worktree access: skipped"*"symlink"*) true;; *) false;; esac && ok "a symlinked settings.local.json is skipped and its target untouched" || bad "symlink file: rc=$rc victim=$(cat "$TMP/victim.json") out=$out"
+R12="$TMP/accessrepo7"; newrepo "$R12"; mkdir -p "$TMP/elsewhere"; echo '{"keep": 2}' > "$TMP/elsewhere/settings.local.json"
+ln -s "$TMP/elsewhere" "$R12/.claude"
+out="$(bash "$ENABLE" "$R12" --no-commit 2>&1)"
+[ "$(cat "$TMP/elsewhere/settings.local.json")" = '{"keep": 2}' ] && case "$out" in *"worktree access: skipped"*"symlink"*) true;; *) false;; esac && ok "a symlinked .claude is skipped for settings.local.json" || bad "symlink dir: $(cat "$TMP/elsewhere/settings.local.json") out=$out"
+R13="$TMP/accessrepo8"; newrepo "$R13"; mkdir -p "$R13/.claude"; echo '{"tracked": true}' > "$R13/.claude/settings.local.json"
+git -C "$R13" add -f .claude/settings.local.json && git -C "$R13" commit -q -m track
+out="$(bash "$ENABLE" "$R13" 2>&1)"
+[ "$(cat "$R13/.claude/settings.local.json")" = '{"tracked": true}' ] && case "$out" in *"worktree access: skipped"*"tracked"*) true;; *) false;; esac && ok "a tracked settings.local.json is skipped" || bad "tracked local settings: out=$out"
+
+# Codex PR 28: the exclude rule starts on its own line; a negation that beats it stops enable before writing; whitespace-only JSON is malformed
+R14="$TMP/accessrepo9"; newrepo "$R14"; ex14="$(git -C "$R14" rev-parse --absolute-git-dir)/info/exclude"; mkdir -p "$(dirname "$ex14")"; printf 'private.txt' > "$ex14"
+bash "$ENABLE" "$R14" >/dev/null 2>&1
+grep -qx 'private.txt' "$ex14" && grep -qx '.claude/settings.local.json' "$ex14" && git -C "$R14" check-ignore -q .claude/settings.local.json && ok "the exclude rule goes on its own line after an unterminated last line" || bad "exclude newline: $(cat "$ex14" | tr '\n' '|')"
+R15="$TMP/accessrepo10"; newrepo "$R15"; printf '!.claude/settings.local.json\n' > "$R15/.gitignore"; git -C "$R15" add .gitignore && git -C "$R15" commit -q -m gi
+out="$(bash "$ENABLE" "$R15" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && [ ! -e "$R15/.claude/settings.local.json" ] && case "$out" in *"not ignored by git"*) true;; *) false;; esac && ok "a .gitignore negation that beats the exclude stops enable before writing" || bad "negation: rc=$rc exists=$([ -e "$R15/.claude/settings.local.json" ] && echo yes) out=$out"
+R16="$TMP/accessrepo11"; newrepo "$R16"; mkdir -p "$R16/.claude"; printf '  \n' > "$R16/.claude/settings.local.json"
+out="$(bash "$ENABLE" "$R16" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && [ "$(cat "$R16/.claude/settings.local.json")" = "  " ] && case "$out" in *"settings.local.json is not valid JSON"*) true;; *) false;; esac && ok "a whitespace-only settings.local.json stops enable and is left alone" || bad "whitespace file: rc=$rc out=$out"
 
 exit $fail
