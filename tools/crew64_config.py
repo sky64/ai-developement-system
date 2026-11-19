@@ -5,6 +5,7 @@ Importable by the guard hook, callable as a CLI by the bot scripts and the
 orchestrator. Standard library only.
 
     python3 -I tools/crew64_config.py get <dotted.key>   value, or exit 1
+    python3 -I tools/crew64_config.py get this_host      the platform.hosts key for this machine, or none
                                        (features.<name>, limits.<name> and process.<name>
                                        apply the fallbacks)
     python3 -I tools/crew64_config.py status              one status line
@@ -31,6 +32,7 @@ Rules:
 """
 import json
 import os
+import socket
 import subprocess
 import sys
 
@@ -49,6 +51,7 @@ LIMIT_ENV_PREFIX = "CREW64_LIMIT_"
 PROCESS_MODES = ("auto", "native", "delegated")
 PROCESS_LIMITS = ("native_max_files", "native_max_tool_calls")
 PROCESS_ENV = "CREW64_PROCESS_MODE"
+THIS_HOST_ENV = "CREW64_THIS_HOST"
 
 
 def _defaults_path() -> str:
@@ -273,6 +276,40 @@ def _process_status(cfg) -> str:
     )
 
 
+def _short_host(name) -> str:
+    return name.strip().split(".")[0].lower() if isinstance(name, str) else ""
+
+
+def _valid_hostnames(value) -> bool:
+    return (isinstance(value, list) and len(value) > 0
+            and all(isinstance(n, str) and _short_host(n) for n in value))
+
+
+def this_host(cfg, env=None, hostname=None):
+    """The platform.hosts key for the machine running this reader, or None.
+
+    CREW64_THIS_HOST names the entry outright (and must be a key). Otherwise
+    the first entry, in key order, whose `hostnames` list holds this machine's
+    short hostname (case and any domain suffix ignored). Entries without a
+    valid `hostnames` list never match. An untrusted or absent config uses
+    the shipped defaults, which list no hosts.
+    """
+    env = os.environ if env is None else env
+    eff = cfg if isinstance(cfg, dict) else defaults()
+    platform = eff.get("platform") if isinstance(eff.get("platform"), dict) else {}
+    hosts = platform.get("hosts") if isinstance(platform.get("hosts"), dict) else {}
+    forced = env.get(THIS_HOST_ENV, "").strip()
+    if forced:
+        return forced if forced in hosts else None
+    me = _short_host(hostname if hostname is not None else socket.gethostname())
+    for key in sorted(hosts):
+        entry = hosts[key]
+        names = entry.get("hostnames") if isinstance(entry, dict) else None
+        if _valid_hostnames(names) and me in {_short_host(n) for n in names}:
+            return key
+    return None
+
+
 def deviations(cfg: dict, base: dict):
     """Dotted keys under models whose value differs from base."""
     out = []
@@ -320,6 +357,7 @@ def status_line(cfg, cwd: str) -> str:
         f" {_process_status(cfg)}"
         f" platform={platform.get('kind', 'orca')}"
         f" hosts={','.join(sorted(hosts)) if hosts else 'none'}"
+        f" this_host={this_host(cfg) or 'none'}"
         f" gateway={gateway.get('kind', 'none')}"
         f" models={models}"
     )
@@ -367,6 +405,12 @@ def check(data) -> list:
         problems.append("platform.kind must be a string")
     elif not isinstance(platform.get("hosts"), dict):
         problems.append("platform.hosts must be an object")
+    else:
+        for key, entry in sorted(platform["hosts"].items()):
+            if not isinstance(entry, dict):
+                problems.append(f"platform.hosts.{key} must be an object")
+            elif "hostnames" in entry and not _valid_hostnames(entry["hostnames"]):
+                problems.append(f"platform.hosts.{key}.hostnames must be a list of host names")
     gateway = data.get("gateway")
     if not isinstance(gateway, dict) or gateway.get("kind") not in METERING_KINDS:
         problems.append(f"gateway.kind must be one of {', '.join(METERING_KINDS)}")
@@ -434,6 +478,9 @@ def cli(argv) -> int:
                 sys.stderr.write(f"crew64_config: unknown limit {key}\n")
                 return 1
             _print_value(limit(cfg, name))
+            return 0
+        if key == "this_host":
+            _print_value(this_host(cfg) or "none")
             return 0
         if key.startswith("process."):
             name = key[len("process."):]
