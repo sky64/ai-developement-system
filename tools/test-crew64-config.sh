@@ -299,4 +299,24 @@ out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
 python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["platform"]["hosts"]={"box-u":{"hostnames":[sys.argv[3]]}}; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M3/.claude/crew64.json" "$HN"
 out="$(run "$M3" status)"; case "$out" in *"config=untrusted:"*"hosts=none this_host=none "*) ok "untrusted root's hosts are not applied";; *) bad "untrusted this_host: $out";; esac
 
+# 26. models.orchestrator and the worktree-access settings: optional, defaults apply
+sethosts '{}'
+out="$(run "$M" get models.orchestrator)"; [ "$out" = "claude-fable-5-1" ] && ok "get models.orchestrator → the default" || bad "orchestrator default: $out"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); del d["models"]["orchestrator"]; del d["features"]["native_worktree_access"]; del d["platform"]["worktree_root"]; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M/.claude/crew64.json"
+out="$(run "$M" status)"; case "$out" in *"models=defaults"*) ok "a models block without orchestrator is no deviation";; *) bad "orchestrator absent deviation: $out";; esac
+out="$(run "$M" get models.orchestrator)"; [ "$out" = "claude-fable-5-1" ] && ok "absent models.orchestrator reads as the default" || bad "orchestrator absent get: $out"
+out="$(run "$M" get features.native_worktree_access)"; [ "$out" = "true" ] && ok "absent native_worktree_access reads as true" || bad "access absent: $out"
+out="$(run "$M" get platform.worktree_root)"; [ "$out" = "~/orca/workspaces" ] && ok "absent platform.worktree_root reads as the default" || bad "worktree_root absent: $out"
+out="$(run "$M" check "$M/.claude/crew64.json")"; [ $? = 0 ] && ok "check accepts a config without the three optional keys" || bad "check optional keys: $out"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["models"]["orchestrator"]="claude-opus-5-5"; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M/.claude/crew64.json"
+out="$(run "$M" status)"; case "$out" in *"models=deviates: models.orchestrator"*) ok "a different models.orchestrator is a deviation";; *) bad "orchestrator deviation: $out";; esac
+for v in '""' '3' '[]'; do
+  python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["models"]["orchestrator"]=json.loads(sys.argv[3]); d["platform"]["worktree_root"]=json.loads(sys.argv[3]); json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$M/.claude/crew64.json" "$v"
+  out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+  [ "$rc" = 1 ] && case "$out" in *"models.orchestrator must be a model id"*) true;; *) false;; esac && case "$out" in *"platform.worktree_root must be a path"*) true;; *) false;; esac && ok "check orchestrator/worktree_root $v → exit 1" || bad "check optional $v: rc=$rc out=$out"
+done
+setfeat '"yes"' native_worktree_access
+out="$(run "$M" check "$M/.claude/crew64.json")"; rc=$?
+[ "$rc" = 1 ] && case "$out" in *"features.native_worktree_access must be true or false"*) true;; *) false;; esac && ok "check a non-bool native_worktree_access → exit 1" || bad "check access: rc=$rc out=$out"
+
 exit $fail

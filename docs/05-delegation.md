@@ -48,7 +48,7 @@ The ladder table. The ids below are the shipped defaults in `config/crew64.defau
 
 | Role | Rung 0 | Rung 1 | Rung 2 |
 |---|---|---|---|
-| Orchestrator session | not applicable | not applicable | top Claude model (`claude-opus-5-5`) |
+| Orchestrator session | not applicable | not applicable | `models.orchestrator` (shipped default `claude-fable-5-1`, the owner's choice on 2026-11-18) |
 | Research and read-only subagents (native, inside the orchestrator; `crew64:scout64` at rung 0 when `features.scout64` is on, otherwise the Agent tool's `model` parameter) | `claude-haiku-5-5` (`haiku`) | `claude-sonnet-5-5` (`sonnet`) | `claude-opus-5-5` (`opus`) |
 | Implementer, Claude worker (Orca `--model`) | `claude-haiku-5-5` | `claude-sonnet-5-5` | `claude-opus-5-5` |
 | Implementer, DeepSeek worker (`dsh` patch overlay named in the brief) | cheapest overlay (`deepseek-flash` today) | standard overlay (`deepseek-v4-pro` today) | not used; rung 2 implementation goes to the Claude row |

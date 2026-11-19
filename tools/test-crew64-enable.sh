@@ -261,4 +261,39 @@ R4="$TMP/r4"; newrepo "$R4"; n1="$(git -C "$R4" rev-list --count HEAD)"
 out="$(bash "$ENABLE" "$R4" --no-commit 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "$(git -C "$R4" rev-list --count HEAD)" = "$n1" ] && git -C "$R4" diff --cached --name-only | grep -q 'crew64.json' && ok "--no-commit stages the config without committing" || bad "--no-commit: rc=$rc out=$out"
 
+# 6. native worktree access: settings.local.json lists <worktree_root>/<repo name>, never committed
+R6="$TMP/accessrepo"; newrepo "$R6"
+out="$(bash "$ENABLE" "$R6" 2>&1)"; rc=$?
+want="$HOME/orca/workspaces/accessrepo"
+got="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["additionalDirectories"])' "$R6/.claude/settings.local.json" 2>&1)"
+[ "$rc" = 0 ] && [ "$got" = "['$want']" ] && ok "settings.local.json lists the Orca worktree dir for this repo" || bad "worktree access: rc=$rc got=$got out=$out"
+case "$out" in *"worktree access: $want added to .claude/settings.local.json"*) ok "enable reports the added worktree dir";; *) bad "worktree access message: $out";; esac
+git -C "$R6" ls-files --error-unmatch .claude/settings.local.json >/dev/null 2>&1 && bad "settings.local.json was committed" || ok "settings.local.json is not committed"
+git -C "$R6" check-ignore -q .claude/settings.local.json && ok "settings.local.json is ignored by git" || bad "settings.local.json not ignored"
+[ -z "$(git -C "$R6" status --porcelain)" ] && ok "worktree access leaves the tree clean" || bad "dirty after enable: $(git -C "$R6" status --porcelain)"
+before="$(cat "$R6/.claude/settings.local.json")"; nx="$(grep -c 'settings.local.json' "$(git -C "$R6" rev-parse --absolute-git-dir)/info/exclude")"
+out="$(bash "$ENABLE" "$R6" 2>&1)"
+[ "$before" = "$(cat "$R6/.claude/settings.local.json")" ] && [ "$nx" = "$(grep -c 'settings.local.json' "$(git -C "$R6" rev-parse --absolute-git-dir)/info/exclude")" ] && case "$out" in *"worktree access: $want already listed"*) true;; *) false;; esac && ok "a re-run leaves settings.local.json and the exclude file unchanged" || bad "worktree access re-run: $out"
+# an existing settings.local.json keeps its other keys and entries
+R7="$TMP/accessrepo2"; newrepo "$R7"; mkdir -p "$R7/.claude"
+printf '{"permissions": {"allow": ["Bash(ls:*)"], "additionalDirectories": ["/opt/x"]}, "model": "m"}\n' > "$R7/.claude/settings.local.json"
+bash "$ENABLE" "$R7" >/dev/null 2>&1
+got="$(python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d["model"], d["permissions"]["allow"], d["permissions"]["additionalDirectories"])' "$R7/.claude/settings.local.json" 2>&1)"
+[ "$got" = "m ['Bash(ls:*)'] ['/opt/x', '$HOME/orca/workspaces/accessrepo2']" ] && ok "existing settings.local.json keys and entries are kept" || bad "merge settings.local.json: $got"
+# the switch off: nothing written
+R8="$TMP/accessrepo3"; newrepo "$R8"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["features"]["native_worktree_access"]=False; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$TMP/cfg-noaccess.json"
+out="$(bash "$ENABLE" "$R8" --config "$TMP/cfg-noaccess.json" 2>&1)"
+[ ! -e "$R8/.claude/settings.local.json" ] && case "$out" in *"worktree access: off"*) true;; *) false;; esac && ok "features.native_worktree_access false → no settings.local.json" || bad "access off: $out"
+# platform.worktree_root overrides the default
+R9="$TMP/accessrepo4"; newrepo "$R9"
+python3 -I -c 'import json,sys; d=json.load(open(sys.argv[1])); d["platform"]["worktree_root"]=sys.argv[3]; json.dump(d,open(sys.argv[2],"w"))' "$DEFAULTS" "$TMP/cfg-root.json" "$TMP/wtroot"
+bash "$ENABLE" "$R9" --config "$TMP/cfg-root.json" >/dev/null 2>&1
+got="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["permissions"]["additionalDirectories"])' "$R9/.claude/settings.local.json" 2>&1)"
+[ "$got" = "['$TMP/wtroot/accessrepo4']" ] && ok "platform.worktree_root sets the directory" || bad "worktree_root: $got"
+# a settings.local.json that is not an object stops with an error and is left alone
+R10="$TMP/accessrepo5"; newrepo "$R10"; mkdir -p "$R10/.claude"; echo '[1]' > "$R10/.claude/settings.local.json"
+out="$(bash "$ENABLE" "$R10" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && [ "$(cat "$R10/.claude/settings.local.json")" = "[1]" ] && case "$out" in *"settings.local.json is not a JSON object"*) true;; *) false;; esac && ok "a non-object settings.local.json stops enable and is left alone" || bad "non-object local settings: rc=$rc out=$out"
+
 exit $fail
